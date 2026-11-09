@@ -1,0 +1,22 @@
+ffbd: taxa 4 (extant 3, fossils 1), mode control, cond root, data 0, rho 0.5, moves total weight 8
+START lnFBD -18.56295691 lnRoot -7.82669381 lnHyper 4.90775528 lnRatePrior 0.00000000 lnData 0.00000000 lnWin -1.38634436 total -22.86823981
+BURNIN done (20000 proposals), lnPost -18.958418
+RUN done: 300000000 generations, s = 22.197
+MOVE SUMMARY (proposals / accepted / rate / tuning):
+  node_slide                  112493425     37535011   0.3337
+  fossil_age                   37501657     36927806   0.9847
+  regraft_local                37499931     12926956   0.3447
+  regraft_global               75003678     40413728   0.5388
+  collapse_expand              37501309     18345657   0.4892
+FINAL lnPost -22.626246
+
+
+SAMPLES 150001; trees 150001
+quantity	mcmc	quadrature	diff	batch_se	z
+P(SA)	0.68710	0.68894	-0.00184	0.00101	-1.82
+mean fossil age	4.91254	4.91442	-0.00188	0.00313	-0.60
+mean age_n1	7.48946	7.47186	+0.01760	0.01296	+1.36
+P(on edge A)	0.29472	0.29413	+0.00059	0.00146	+0.40
+P(on edge B)	0.29662	0.29413	+0.00249	0.00134	+1.87
+P(on stem of AB)	0.40866	0.41174	-0.00308	0.00129	-2.40
+ANALYTIC_CHECK PASS

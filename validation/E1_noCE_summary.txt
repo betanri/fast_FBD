@@ -1,0 +1,6 @@
+A06_root: ffbd_noCE chains 2 samples per chain [9001, 9001]; rb_noCE chains 2 samples [6751, 6751]
+--- ages: n=23  |%diff medians|: median 0.275, max 1.436 (age_n2); #>1%: 2; width ratio: median 0.994, range 0.967-1.011; rb_noCE chain-to-chain %diff median 0.586 max 2.048; ESS(min over chains) ffbd_noCE: 7666, rb_noCE: 292
+--- params: n=10  |%diff medians|: median 0.068, max 2.902 (extinction_rate); #>1%: 3; width ratio: median 0.984, range 0.968-1.015; rb_noCE chain-to-chain %diff median 0.556 max 3.022; ESS(min over chains) ffbd_noCE: 1, rb_noCE: 0
+A12_root: ffbd_noCE chains 2 samples per chain [9001, 9001]; rb_noCE chains 2 samples [6751, 6751]
+--- ages: n=21  |%diff medians|: median 0.408, max 1.435 (age_n2); #>1%: 4; width ratio: median 0.997, range 0.977-1.011; rb_noCE chain-to-chain %diff median 0.698 max 3.794; ESS(min over chains) ffbd_noCE: 8141, rb_noCE: 583
+--- params: n=10  |%diff medians|: median 0.026, max 0.575 (psi); #>1%: 0; width ratio: median 0.989, range 0.967-1.016; rb_noCE chain-to-chain %diff median 0.078 max 3.607; ESS(min over chains) ffbd_noCE: 8283, rb_noCE: 0

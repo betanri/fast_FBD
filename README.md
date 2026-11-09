@@ -1,0 +1,127 @@
+# fast_FBD
+
+A fast Bayesian program for dating phylogenies with fossils, using the **fossilized birth-death (FBD)** process.
+
+> **Status: research software, validation in progress.** The math and sampling have passed strict tests. The comparison with full-DNA analyses is still running. See [Validation status](#validation-status) before using results.
+
+## What it does
+
+FBD dating treats fossils as real tips on the tree, instead of turning them into minimum ages on nodes. That uses all the fossils, not just the oldest ones, but standard programs become extremely slow on large trees.
+
+`ffbd` makes this practical with two ideas:
+
+1. **Fast FBD.** The DNA alignment is summarized once, as a tree of branch lengths with a standard error for each branch. The program then asks how well each proposed set of dates and rates explains those branch lengths, instead of recalculating the full DNA likelihood.
+2. **Local updates.** When one age changes, only the affected terms are recalculated. Cost per step does not grow with tree size.
+
+On one CPU core it runs about **2.6 million MCMC proposals per second**, with no slowdown between 1,185 and 2,424 tips.
+
+## What is fixed and what is estimated
+
+| Fixed | Estimated |
+|---|---|
+| The relationships among living species | Ages of all nodes |
+| Sampling fraction of living species (rho) | Speciation, extinction and fossil sampling rates |
+| Fossil clade constraints and age windows | Where each fossil attaches, within its constraint |
+| | Each fossil's age, within its window |
+| | Whether a fossil is a sampled ancestor |
+| | Rates of molecular evolution, per branch |
+
+**Use it when** the tree of living species is settled, you have many fossils, and full-DNA FBD is too slow.
+
+**Do not use it when** the topology of living species is in question, or for very short or poorly supported branches where a Normal approximation of branch length is doubtful.
+
+## Install
+
+You need a C++17 compiler and nothing else.
+
+```bash
+git clone https://github.com/betanri/fast_FBD.git
+cd fast_FBD
+make
+```
+
+## Quick start
+
+A tiny simulated data set is included (4 living species, 3 fossils):
+
+```bash
+mkdir -p runs
+./ffbd run examples/example_input.txt --prefix runs/example --seed 1 --gens 2000000 --print 2000 --tree-print 20000 --burnin 100000
+```
+
+This takes under a second and writes:
+
+| File | Contents |
+|---|---|
+| `runs/example.log` | One row per sample: posterior, rates, and the age of each node (`age_n1`, ...), readable in Tracer |
+| `runs/example.trees` | Sampled trees with fossils as tips |
+
+Run at least two chains with different `--seed` values and check that they agree.
+
+## What you need
+
+| Input | Notes |
+|---|---|
+| Rooted tree of living species | Fixed topology |
+| Branch lengths and their standard errors | For example ML branch lengths on the fixed tree, with bootstrap standard errors |
+| Fossil list | Name, minimum and maximum age |
+| Clade constraints | Which fossils belong in which clades |
+| Sampling fraction (rho) | Share of living species included |
+| Root age prior | `uniform MIN MAX`, `soft MIN MAX SD P` (soft bounds) or `normal MEAN SD` |
+| A valid starting tree | With fossils attached, and consistent with the constraints |
+
+These go in one text file. `examples/example_input.txt` shows every section: the settings, then `tips`, `initial_tree`, `constraints`, `extant_nodes`, `branches` and `terms`. If your inputs are already in RevBayes-style files, `scripts/ffbd_convert.py` builds this file for you.
+
+## Main options
+
+| Option | Meaning |
+|---|---|
+| `--prefix P` | Start of the output file names |
+| `--seed S` | Random seed |
+| `--gens G` | Number of proposals |
+| `--burnin N` | Proposals used to tune moves, not logged |
+| `--print N`, `--tree-print N` | How often to log parameters and trees |
+| `--checkpoint N`, `--resume` | Save progress and continue a run exactly where it stopped |
+| `--mode control` | Run without molecular data, to see what the fossils and priors alone imply |
+| `--log-rates` | Also log branch rates |
+| `--check` | Check internal consistency while running (slow) |
+
+## The model
+
+- Constant-rate fossilized birth-death process with sampled ancestors, conditioned on the root age. The density matches RevBayes 1.3.2 `dnBDSTP` inside `dnConstrainedTopology`.
+- Fossil ages are uniform within their windows.
+- Clock: one rate per branch of the living-species tree, exponential by default or uncorrelated lognormal.
+- Data: for each branch, observed length ~ Normal(rate x time, standard error). The two branches at the root share one observation.
+
+## Validation status
+
+Full details and result files are in [VALIDATION.md](VALIDATION.md). Status as of 9 November 2026.
+
+| Test | Result |
+|---|---|
+| Probabilities equal RevBayes 1.3.2 on fixed trees | **Passed**: difference at most 4e-9 on 89 states across 4 data sets |
+| Simulation-based calibration, data simulated from known truth (500 replicates, 3 settings) | **Passed** |
+| Prior-only run against exact analytic results | **Passed** |
+| Internal consistency and exact restart from a checkpoint | **Passed** |
+| Agreement with RevBayes with sampled-ancestor changes switched off | **Passed**: node ages differ by 0.3 to 0.4% (median) |
+| Agreement with RevBayes with sampled-ancestor changes switched on | **Does not match**, apparently because of a RevBayes move; see below |
+| Fast FBD against full-DNA FBD, two fish clades | **Running** |
+| Comparison on a large catfish data set (713 living tips, 94 fossils) | **Running** |
+| Convergence on large trees | **Running** |
+
+### A difference from RevBayes
+
+`ffbd` and RevBayes 1.3.2 give different posteriors when fossils have age ranges and sampled ancestors can be added or removed. The evidence points to the RevBayes move `mvCollapseExpandFossilBranch`. In the 1.3.2 source, it draws the new attachment age above the *maximum* of the fossil's age window, while the reverse move can start from attachments inside the window. Those states can be left but not re-entered in the same way, so the move is not reversible.
+
+With that move removed from both programs, they agree. `ffbd` also recovers known truth in simulations. We have not yet confirmed this with the RevBayes developers. `--rb-sa-move` imitates that proposal, for testing only.
+
+## Known limits
+
+- The topology of living species cannot change.
+- Fossils must fall inside a clade constraint below the root in root-conditioned runs.
+- Rates are constant through time (no shifts or mass extinctions).
+- The result depends on the quality of the branch lengths and their standard errors.
+
+## Citation and license
+
+Not yet published. No license has been chosen yet, so please contact the author before reusing the code.

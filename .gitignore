@@ -1,0 +1,7 @@
+ffbd
+ffbd_sim
+runs/
+*.log
+*.trees
+*.ckp
+.DS_Store

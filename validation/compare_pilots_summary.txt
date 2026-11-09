@@ -1,0 +1,47 @@
+===== STEP 3 prior: A06_root
+A06_root: ffbd_control chains 2 samples per chain [9001, 9001]; rb_control chains 2 samples [6751, 6751]
+--- ages: n=23  |%diff medians|: median 1.640, max 12.798 (age_n2); #>1%: 18; width ratio: median 1.008, range 0.993-1.049; rb_control chain-to-chain %diff median 0.764 max 2.500; ESS(min over chains) ffbd_control: 7320, rb_control: 332
+--- params: n=10  |%diff medians|: median 0.087, max 25.976 (extinction_rate); #>1%: 3; width ratio: median 1.047, range 0.800-1.218; rb_control chain-to-chain %diff median 0.230 max 4.272; ESS(min over chains) ffbd_control: 1, rb_control: 0
+
+
+===== STEP 4 posterior: A06_root
+A06_root: ffbd_fast chains 2 samples per chain [9001, 9001]; rb_fast chains 2 samples [13501, 13501]
+--- ages: n=23  |%diff medians|: median 1.125, max 21.463 (age_n2); #>1%: 15; width ratio: median 1.025, range 0.963-1.237; rb_fast chain-to-chain %diff median 1.110 max 7.424; ESS(min over chains) ffbd_fast: 5642, rb_fast: 35
+--- params: n=12  |%diff medians|: median 1.297, max 48.394 (extinction_rate); #>1%: 7; width ratio: median 1.002, range 0.979-1.310; rb_fast chain-to-chain %diff median 0.647 max 4.114; ESS(min over chains) ffbd_fast: 7465, rb_fast: 179
+--- rates: n=46  |%diff medians|: median 1.958, max 43.723 (branch_rates[43]); #>1%: 32; width ratio: median 1.013, range 0.772-2.241; rb_fast chain-to-chain %diff median 2.000 max 19.510; ESS(min over chains) ffbd_fast: 6746, rb_fast: 39
+
+
+===== STEP 5 DNA: A06_root
+A06_root: ffbd_fast chains 2 samples per chain [9001, 9001]; rb_dna chains 2 samples [6883, 7638]
+--- ages: n=23  |%diff medians|: median 1.182, max 16.442 (age_n2); #>1%: 14; width ratio: median 1.105, range 0.863-1.358; rb_dna chain-to-chain %diff median 1.907 max 6.547; ESS(min over chains) ffbd_fast: 5642, rb_dna: 10
+--- params: n=12  |%diff medians|: median 6.054, max 100.237 (Likelihood); #>1%: 8; width ratio: median 1.017, range 0.939-1.270; rb_dna chain-to-chain %diff median 0.995 max 3.499; ESS(min over chains) ffbd_fast: 7465, rb_dna: 51
+--- rates: n=46  |%diff medians|: median 4.739, max 36.757 (branch_rates[32]); #>1%: 40; width ratio: median 0.981, range 0.614-1.980; rb_dna chain-to-chain %diff median 2.163 max 17.310; ESS(min over chains) ffbd_fast: 6746, rb_dna: 12
+
+
+===== STEP 3 prior: A12_root
+A12_root: ffbd_control chains 2 samples per chain [9001, 9001]; rb_control chains 2 samples [6751, 6751]
+--- ages: n=21  |%diff medians|: median 4.969, max 8.092 (age_n7); #>1%: 20; width ratio: median 0.982, range 0.918-1.054; rb_control chain-to-chain %diff median 1.359 max 3.853; ESS(min over chains) ffbd_control: 8413, rb_control: 591
+--- params: n=10  |%diff medians|: median 1.175, max 20.517 (extinction_rate); #>1%: 5; width ratio: median 1.043, range 0.981-1.159; rb_control chain-to-chain %diff median 0.110 max 2.182; ESS(min over chains) ffbd_control: 8069, rb_control: 0
+
+
+===== STEP 4 posterior: A12_root
+A12_root: ffbd_fast chains 2 samples per chain [9001, 9001]; rb_fast chains 2 samples [13501, 13501]
+--- ages: n=21  |%diff medians|: median 2.593, max 13.026 (age_n7); #>1%: 17; width ratio: median 1.009, range 0.899-1.133; rb_fast chain-to-chain %diff median 6.093 max 10.631; ESS(min over chains) ffbd_fast: 6404, rb_fast: 32
+--- params: n=12  |%diff medians|: median 1.115, max 24.809 (extinction_rate); #>1%: 6; width ratio: median 1.049, range 0.984-1.176; rb_fast chain-to-chain %diff median 2.507 max 5.863; ESS(min over chains) ffbd_fast: 8063, rb_fast: 65
+--- rates: n=42  |%diff medians|: median 2.322, max 15.036 (branch_rates[8]); #>1%: 35; width ratio: median 1.036, range 0.921-1.505; rb_fast chain-to-chain %diff median 7.239 max 15.327; ESS(min over chains) ffbd_fast: 4658, rb_fast: 39
+
+
+===== STEP 5 DNA: A12_root
+A12_root: ffbd_fast chains 2 samples per chain [9001, 9001]; rb_dna chains 2 samples [7745, 11251]
+--- ages: n=21  |%diff medians|: median 2.385, max 11.244 (age_n7); #>1%: 14; width ratio: median 1.013, range 0.868-1.065; rb_dna chain-to-chain %diff median 3.800 max 12.109; ESS(min over chains) ffbd_fast: 6404, rb_dna: 15
+--- params: n=12  |%diff medians|: median 1.147, max 100.434 (Likelihood); #>1%: 6; width ratio: median 1.009, range 0.949-1.186; rb_dna chain-to-chain %diff median 1.659 max 6.783; ESS(min over chains) ffbd_fast: 8063, rb_dna: 21
+--- rates: n=42  |%diff medians|: median 3.856, max 11.772 (branch_rates[33]); #>1%: 33; width ratio: median 1.026, range 0.752-1.330; rb_dna chain-to-chain %diff median 4.787 max 13.328; ESS(min over chains) ffbd_fast: 4658, rb_dna: 19
+
+
+===== STEP 4 bears
+bears: ffbd_fast chains 2 samples per chain [9001, 9001]; rb_fast chains 2 samples [5401, 5401]
+--- ages: n=7  |%diff medians|: median 8.962, max 12.609 (age_ingroup); #>1%: 7; width ratio: median 0.951, range 0.909-1.000; rb_fast chain-to-chain %diff median 1.223 max 3.244; ESS(min over chains) ffbd_fast: 4351, rb_fast: 258
+--- params: n=13  |%diff medians|: median 10.213, max 53.689 (extinction_rate); #>1%: 10; width ratio: median 1.152, range 0.991-1.500; rb_fast chain-to-chain %diff median 0.940 max 2.800; ESS(min over chains) ffbd_fast: 5913, rb_fast: 614
+--- rates: n=14  |%diff medians|: median 9.808, max 14.167 (branch_rates[3]); #>1%: 14; width ratio: median 1.156, range 1.081-1.229; rb_fast chain-to-chain %diff median 1.677 max 4.624; ESS(min over chains) ffbd_fast: 6430, rb_fast: 481
+
+
