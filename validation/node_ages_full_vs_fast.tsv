@@ -1,0 +1,4 @@
+set	quantity	n	r	median_abs_pct	share_within_10pct	mean_signed_Myr
+Gobiaria	node_age	23	0.9979	1.50	1.000	0.475
+Protacanthopterygii	node_age	21	0.9989	2.72	1.000	-0.262
+Catfishes	node_age	553	0.9948	10.21	0.474	-1.776

@@ -73,16 +73,16 @@ RevBayes node-age ESS was low on these runs (32 to 35 per chain on the Fast FBD 
 
 ## 5. Fast FBD against full-DNA FBD (passed)
 
-RevBayes 1.3.2 full-DNA FBD and `ffbd` Fast FBD on A06 and A12, two chains each, same fossils, priors and uniform root prior. The RevBayes collapse-expand move is removed (section 4), so the only remaining difference is the branch-length approximation. Each side was summarized as an extant time tree (median node ages), and branches were matched by clade and parent clade (`scripts/branch_scatter.py`; `validation/branch_lengths_full_vs_fast.tsv`).
+RevBayes 1.3.2 full-DNA FBD and `ffbd` Fast FBD on A06 and A12, two chains each, same fossils, priors and uniform root prior. The RevBayes collapse-expand move is removed (section 4), so the only remaining difference is the branch-length approximation. Each side was summarized as an extant time tree (median node ages), and nodes were matched by clade (`scripts/branch_scatter.py --ages-only`; `validation/node_ages_full_vs_fast.tsv`).
 
-| Data set | Branches | r (log scale) | Median difference | Within 10% | Root age, full vs Fast |
+| Data set | Nodes | r | Median difference | Mean difference (Fast minus full) | Root age, full vs Fast |
 |---|---|---|---|---|---|
-| A06 | 46 | 0.998 | 2.9% | 91% | 75.1 vs 75.2 Ma |
-| A12 | 42 | 0.996 | 2.9% | 91% | 139.1 vs 139.0 Ma |
+| A06 | 23 | 0.998 | 1.5% | +0.5 Myr | 75.1 vs 75.2 Ma |
+| A12 | 21 | 0.999 | 2.7% | -0.3 Myr | 139.1 vs 139.0 Ma |
 
 ## 6. Catfish (close, not identical)
 
-`ffbd` Fast FBD against the original full analysis of the same data: 1,106 branches, r = 0.958 (log scale), median difference 10.6%, 46% within 10%; node ages r = 0.994, Fast 1.8 Myr younger on average. Fast FBD ages come from all logged samples of both chains. The original analysis used an uncorrelated lognormal clock in RevBayes with the collapse-expand move, so it is not a like-for-like comparison. The differences are largest on short branches.
+`ffbd` Fast FBD against the original full analysis of the same data: 553 nodes matched by clade, r = 0.995, Fast 1.8 Myr younger on average (median difference 10.2%, largest on young nodes). Fast FBD ages come from all logged samples of both chains. The original analysis used an uncorrelated lognormal clock in RevBayes with the collapse-expand move, so it is not a like-for-like comparison.
 
 ## 7. Convergence on large trees (passed)
 
