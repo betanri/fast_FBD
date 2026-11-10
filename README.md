@@ -122,7 +122,7 @@ Full details and result files are in [VALIDATION.md](VALIDATION.md) and `validat
 
 ![Node ages, full-DNA FBD against Fast FBD](validation/node_ages_full_vs_fast.png)
 
-*Each point is one node of the extant time tree (fossils pruned; median ages), matched by clade. Gobiaria and Protacanthopterygii: full-DNA FBD in RevBayes 1.3.2 with `mvCollapseExpandFossilBranch` removed, against `ffbd` on the same data, priors and fossils. Catfishes: the original published-style full analysis against `ffbd`. Dashed line: equal lengths.*
+*Each point is one node of the extant time tree (fossils pruned; median ages), matched by clade. Gobiaria and Protacanthopterygii: full-DNA FBD in RevBayes 1.3.2 with `mvCollapseExpandFossilBranch` removed, against `ffbd` on the same data, priors and fossils. Catfishes: the original full analysis (21-gene alignment, partitioned GTR+Gamma, uncorrelated lognormal clock; run with the original RevBayes moves) against `ffbd`. "Full FBD" means the full DNA sequence likelihood; Fast FBD (`ffbd`) uses only branch lengths and their standard errors, estimated once from the same DNA. Dashed line: equal ages.*
 
 **Crown and stem test.** On the small example (4 living species, 3 fossils), FOSSIL_1 was given a crown rule and FOSSIL_3 a stem rule on the same node. The run with these rules was compared with unconstrained runs kept only where both rules happened to hold (10.3% of samples). If the rules are implemented correctly, the two must give the same distribution. With 11 seeds per side, the rules held in all 1,100,011 samples. Every quantity agreed within 1.4 standard errors: speciation, extinction, fossil sampling, number of sampled ancestors and all three node ages (`validation/crown_stem_test_11seeds.txt`).
 
