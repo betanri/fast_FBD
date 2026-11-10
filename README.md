@@ -122,7 +122,16 @@ Full details and result files are in [VALIDATION.md](VALIDATION.md) and `validat
 
 ![Node ages, full-DNA FBD against Fast FBD](validation/node_ages_full_vs_fast.png)
 
-**Preliminary.** The full-DNA chains (250,000 generations, about 1 day each) are not yet well converged: node-age ESS is 10 to 35 (median 19 and 35), and the two full-DNA chains differ from each other by 1.6% (Gobiaria) and 4.7% (Protacanthopterygii) in median node ages. The agreement above is therefore within the full-DNA runs' own noise; longer full-DNA chains are planned.
+**Preliminary: full-DNA chains still too short; more chains in progress.** Convergence of each side (two chains each, first 10% discarded):
+
+| Data set | Side | Run time per chain | Node-age ESS (median, lowest) | Root-age ESS | Two chains differ (median, largest) |
+|---|---|---|---|---|---|
+| Gobiaria | Full DNA (RevBayes) | ~25 h | 19, 10 | 51-52 | 1.6%, 6.6% |
+| Gobiaria | Fast FBD (`ffbd`) | ~2.5 min | 901, 756 | 764-812 | 0.26%, 1.1% |
+| Protacanthopterygii | Full DNA (RevBayes) | ~22 h | 35, 14 | 557-1,531 | 4.7%, 15.3% |
+| Protacanthopterygii | Fast FBD (`ffbd`) | ~2.5 min | 901, 778 | 901 | 0.79%, 3.7% |
+
+The full-DNA ESS values are low, so the agreement shown below is within the noise of the full-DNA runs. Four more full-DNA chains per clade are running; this test will be updated when they finish.
 
 | Data set | Living species | Fossils | DNA |
 |---|---|---|---|

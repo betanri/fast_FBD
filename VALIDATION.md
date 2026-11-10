@@ -80,7 +80,17 @@ RevBayes 1.3.2 full-DNA FBD and `ffbd` Fast FBD on A06 and A12, two chains each,
 | A06 | 23 | 0.998 | 1.5% | +0.5 Myr | 75.1 vs 75.2 Ma |
 | A12 | 21 | 0.999 | 2.7% | -0.3 Myr | 139.1 vs 139.0 Ma |
 
-**Convergence of the full-DNA side (preliminary).** Two chains of 250,000 generations each (about 25 h for A06, 22 h for A12). Data: A06 24 living species, 10 fossils; A12 22 living species, 14 fossils; 16,107 aligned sites each. Effective sample sizes are low for node ages (A06: median 19, lowest 10; A12: median 35, lowest 14; root age 51 to 52 for A06, 557 to 1,531 for A12), and the two full-DNA chains differ by 1.6% (A06) and 4.7% (A12) in median node ages (largest 6.6% and 15.3%). Fast FBD chains reach ESS of several hundred. The agreement in the table above is therefore within the noise of the full-DNA runs. Longer full-DNA chains are planned before this test is called passed.
+**Convergence (preliminary; longer full-DNA chains in progress).** Two chains each, first 10% discarded. Data: A06 24 living species, 10 fossils; A12 22 living species, 14 fossils; 16,107 aligned sites each.
+
+| Set | Side | Generations or proposals per chain | Run time | Node-age ESS (median, lowest) | Root-age ESS | Chains differ (median, largest) |
+|---|---|---|---|---|---|---|
+| A06 | Full DNA, RevBayes | 250,000 generations | ~25 h | 19, 10 | 51-52 | 1.6%, 6.6% |
+| A06 | Fast FBD, `ffbd` | 400 million proposals | ~2.5 min | 901, 756 | 764-812 | 0.26%, 1.1% |
+| A12 | Full DNA, RevBayes | 250,000 generations | ~22 h | 35, 14 | 557-1,531 | 4.7%, 15.3% |
+| A12 | Fast FBD, `ffbd` | 400 million proposals | ~2.3 min | 901, 778 | 901 | 0.79%, 3.7% |
+
+The full-DNA node-age ESS values are low, so the agreement in the table above is within the noise of the full-DNA runs. Four more full-DNA chains per clade (250,000 generations each) are running; the test will be updated when they finish.
+
 
 ## 6. Catfish (close, not identical)
 
