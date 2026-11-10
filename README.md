@@ -115,14 +115,14 @@ Full details and result files are in [VALIDATION.md](VALIDATION.md) and `validat
 | Internal consistency and exact restart from a checkpoint | **Passed** |
 | Agreement with RevBayes with sampled-ancestor changes switched off | **Passed**: node ages differ by 0.3 to 0.4% (median) |
 | Agreement with RevBayes with sampled-ancestor changes switched on | **Does not match**, apparently because of a RevBayes move; see below |
-| Fast FBD against full-DNA FBD (RevBayes, that move removed), two fish clades | **Passed**: branch lengths in time differ by 2.9% (median), r = 0.998 and 0.996; root ages 75.2 vs 75.1 Ma and 139.0 vs 139.1 Ma |
-| Catfish data set (713 living tips, 94 fossils) against the original full analysis | **Close, not identical**: branch lengths r = 0.958, median difference 10.6% (node ages r = 0.994, Fast 1.8 Myr younger on average). The original used a lognormal clock and the RevBayes move above, so some difference is expected |
+| Fast FBD against full-DNA FBD (RevBayes, that move removed), two fish clades | **Passed**: node ages r = 0.998 and 0.999, mean difference +0.5 and -0.3 Myr; root ages 75.2 vs 75.1 Ma and 139.0 vs 139.1 Ma |
+| Catfish data set (713 living tips, 94 fossils) against the original full analysis | **Close**: node ages r = 0.995, Fast 1.8 Myr younger on average. The original used a lognormal clock and the RevBayes move above, so some difference is expected |
 | Convergence on large trees (1,185 and 2,424 tips) | **Passed**: after 20 billion proposals, main-parameter ESS 500 to 800; two chains agree on node ages to 0.9% (median) |
 | Crown and stem rules (new) | **Passed**: an exact conditioning test (below); runs without these rules are byte-identical to the previous release |
 
-![Branch lengths in time, full-DNA FBD against Fast FBD](validation/branch_lengths_full_vs_fast.png)
+![Node ages, full-DNA FBD against Fast FBD](validation/node_ages_full_vs_fast.png)
 
-*Each point is one branch of the extant time tree (fossils pruned; median node ages), matched by its clade and parent clade. Gobiaria and Protacanthopterygii: full-DNA FBD in RevBayes 1.3.2 with `mvCollapseExpandFossilBranch` removed, against `ffbd` on the same data, priors and fossils. Catfishes: the original published-style full analysis against `ffbd`. Dashed line: equal lengths.*
+*Each point is one node of the extant time tree (fossils pruned; median ages), matched by clade. Gobiaria and Protacanthopterygii: full-DNA FBD in RevBayes 1.3.2 with `mvCollapseExpandFossilBranch` removed, against `ffbd` on the same data, priors and fossils. Catfishes: the original published-style full analysis against `ffbd`. Dashed line: equal lengths.*
 
 **Crown and stem test.** On the small example (4 living species, 3 fossils), FOSSIL_1 was given a crown rule and FOSSIL_3 a stem rule on the same node. The run with these rules was compared with unconstrained runs kept only where both rules happened to hold (10.3% of samples). If the rules are implemented correctly, the two must give the same distribution. With 11 seeds per side, the rules held in all 1,100,011 samples. Every quantity agreed within 1.4 standard errors: speciation, extinction, fossil sampling, number of sampled ancestors and all three node ages (`validation/crown_stem_test_11seeds.txt`).
 
