@@ -131,6 +131,11 @@ public:
     // constraints
     int nCons = 0; vector<vector<int>> consMembers; vector<int> parentCons; vector<int> x; vector<int> homeC; vector<vector<int>> region; vector<int> label, pos;
     vector<string> consName;
+    // crown option: crownOf[f] = extant node v; fossil f may attach only below v (inside the crown), never on or above v's stem. -1 = no crown rule
+    // stem option: stemOf[f] = extant node v; fossil f may not attach below v (outside the crown); its clade constraint keeps it in the total group
+    vector<int> crownOf, stemOf; int nCrown = 0, nStem = 0;
+    inline bool belowNode(int c, int v) const { for (int u = par[c]; u != -1; u = par[u]) if (u == v) return true; return false; } // v is a proper ancestor of c
+    inline bool inCrown(int f) const { return (crownOf[f] < 0 || belowNode(f, crownOf[f])) && (stemOf[f] < 0 || !belowNode(f, stemOf[f])); }
 
     // parameters
     double lam = 0, mu = 0, psi = 0, m = 0; vector<double> rates; double sumRates = 0;
@@ -243,8 +248,13 @@ void Chain::read(const string &path) {
     tb.resize(J); obs.resize(J); se.resize(J); lnSe.resize(J);
     for (int j = 0; j < J; j++) { int id, nb; double o, s; in >> id >> o >> s >> nb; obs[id] = o; se[id] = s; lnSe[id] = log(s); tb[id].resize(nb); for (auto &v : tb[id]) in >> v; }
     vector<double> initR;
-    calLo.assign(nNodes, -1.0); calHi.assign(nNodes, -1.0);
+    calLo.assign(nNodes, -1.0); calHi.assign(nNodes, -1.0); crownOf.assign(N, -1); stemOf.assign(N, -1);
     while (in >> key) {
+        if (key == "crown" || key == "stem") {
+            int c; in >> c; auto &dst = (key == "crown") ? crownOf : stemOf;
+            for (int i = 0; i < c; i++) { int f, v; in >> f >> v; if (f < n || f >= N || v < N || v >= nNodes) die(key + " entry out of range"); if (crownOf[f] >= 0 || stemOf[f] >= 0) die("fossil has two crown/stem rules"); dst[f] = v; }
+            (key == "crown" ? nCrown : nStem) = c; continue;
+        }
         if (key == "calibrations") { int c; in >> c; for (int i = 0; i < c; i++) { int v; double lo, hi; in >> v >> lo >> hi; calLo[v] = lo; calHi[v] = hi; lnCalConst -= log(hi - lo); } }
         else if (key == "init_rates") { int c; in >> c; initR.resize(c); for (auto &v : initR) in >> v; }
         else die("unknown section after terms: " + key);
@@ -310,6 +320,7 @@ void Chain::init() {
         if (found < 0) die("initial tree violates constraint " + consName[k]);
         x[k] = found;
     }
+    for (int f = n; f < N; f++) if (!inCrown(f)) die("initial tree breaks the crown/stem rule of fossil " + names[f]);
     region.assign(nCons + 1, {}); label.assign(nNodes, -1); pos.assign(nNodes, -1);
     for (int v = 0; v < nNodes; v++) {
         if (v == root && !useOrigin) continue; // no edge above the root
@@ -487,6 +498,10 @@ bool Chain::moveRegraft(bool local) {
         int nc = neighbors(c, C, p, f, e2);
         hast += log((double)ns) - log((double)nc);
     }
+    // crown option: the new attachment (p inserted on the edge above c) must be strictly inside the crown, i.e. the crown node is a proper ancestor of c
+    if (crownOf[f] >= 0 && !belowNode(c, crownOf[f])) { attach(p, f, s, oldAgeP); return false; }
+    // stem option: the new attachment must not be inside the crown (attaching on the crown node's own stem edge, c == v, is allowed)
+    if (stemOf[f] >= 0 && belowNode(c, stemOf[f])) { attach(p, f, s, oldAgeP); return false; }
     double topC = par[c] == -1 ? origin : age[par[c]];
     double dF = 0, newA = oldAgeP, logR = 0;
     if (saF) {
@@ -708,6 +723,7 @@ void Chain::validate() {
     }
     if ((int)order.size() != nNodes) die("tree not connected: " + to_string(order.size()));
     for (auto it = order.rbegin(); it != order.rend(); ++it) { int v = *it; if (v < N) tips[v] = {v}; else { tips[v] = tips[c0[v]]; tips[v].insert(tips[v].end(), tips[c1[v]].begin(), tips[c1[v]].end()); sort(tips[v].begin(), tips[v].end()); } }
+    for (int f = n; f < N; f++) if (!inCrown(f)) die("crown/stem rule broken: " + names[f]);
     vector<vector<char>> mem(nCons + 1, vector<char>(N, 0));
     for (int k = 0; k <= nCons; k++) for (int t : consMembers[k]) mem[k][t] = 1;
     vector<int> newLabel(nNodes, -1); vector<int> newX(nCons + 1, -1);

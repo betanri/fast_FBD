@@ -1,0 +1,11 @@
+11 seeds each; rules met in 1100011 of 1100011 crown+stem samples
+quantity          crown+stem  free, kept  diff in SEs
+num_samp_anc          2.4961      2.4987        -1.40
+speciation_rate       0.0843      0.0842         0.37
+extinction_rate       0.0309      0.0308         0.51
+psi                   0.0483      0.0483         0.99
+age_n1               10.7110     10.7113        -0.03
+age_n2                6.8863      6.8832         0.19
+age_n3               18.9802     18.9725         1.23
+
+[exited with code 0]

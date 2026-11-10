@@ -1,6 +1,6 @@
 # Validation of ffbd
 
-Status as of 9 November 2026. "RevBayes" means RevBayes 1.3.2. Result files are in `validation/`.
+Status as of 10 November 2026. "RevBayes" means RevBayes 1.3.2. Result files are in `validation/`.
 
 Data sets: two small fish clades (A06: 24 living species and 10 fossils; A12: 22 and 14), the RevBayes bear tutorial data, and a catfish data set (713 living tips, 94 fossils).
 
@@ -12,9 +12,10 @@ Data sets: two small fish clades (A06: 24 living species and 10 fossils; A12: 22
 | 2 | Simulation-based calibration and analytic prior | Passed |
 | 3 | Agreement with RevBayes, sampled-ancestor changes off | Passed |
 | 4 | Agreement with RevBayes, sampled-ancestor changes on | Does not match (section 4) |
-| 5 | Fast FBD against full-DNA FBD | Running |
-| 6 | Catfish comparison | Running |
-| 7 | Convergence on large trees | Running |
+| 5 | Fast FBD against full-DNA FBD | Passed |
+| 6 | Catfish comparison | Close, not identical (section 6) |
+| 7 | Convergence on large trees | Passed |
+| 8 | Crown and stem rules | Passed |
 
 ## 1. Probabilities on fixed trees (passed)
 
@@ -70,11 +71,29 @@ Three results support this: the probabilities are identical (section 1), the agr
 
 RevBayes node-age ESS was low on these runs (32 to 35 per chain on the Fast FBD runs), so part of each difference is RevBayes sampling noise.
 
-## 5 to 7. Running
+## 5. Fast FBD against full-DNA FBD (passed)
 
-- **Fast FBD against full DNA.** RevBayes full-DNA and `ffbd` runs on A06 and A12, with the collapse-expand move off in both, so the only remaining difference is the branch-length approximation.
-- **Catfish.** Comparison with RevBayes on the same data.
-- **Large trees.** Convergence with two or more chains at 1,185 and 2,424 tips. Interim effective sample sizes after 4.7 billion proposals were 134 to 192 for the main parameters.
+RevBayes 1.3.2 full-DNA FBD and `ffbd` Fast FBD on A06 and A12, two chains each, same fossils, priors and uniform root prior. The RevBayes collapse-expand move is removed (section 4), so the only remaining difference is the branch-length approximation. Each side was summarized as an extant time tree (median node ages), and branches were matched by clade and parent clade (`scripts/branch_scatter.py`; `validation/branch_lengths_full_vs_fast.tsv`).
+
+| Data set | Branches | r (log scale) | Median difference | Within 10% | Root age, full vs Fast |
+|---|---|---|---|---|---|
+| A06 | 46 | 0.998 | 2.9% | 91% | 75.1 vs 75.2 Ma |
+| A12 | 42 | 0.996 | 2.9% | 91% | 139.1 vs 139.0 Ma |
+
+## 6. Catfish (close, not identical)
+
+`ffbd` Fast FBD against the original full analysis of the same data: 1,106 branches, r = 0.956 (log scale), median difference 10.9%, 45% within 10%. The original analysis used an uncorrelated lognormal clock in RevBayes with the collapse-expand move, so it is not a like-for-like comparison. The differences are largest on short branches.
+
+## 7. Convergence on large trees (passed)
+
+Two chains each at 1,185 and 2,424 tips, 20 billion proposals each (about 2 hours on one core): effective sample sizes 500 to 800 for the main parameters, and at least 139 for node ages. Node-age medians agree between chains to 0.9% (median), and 95% of nodes agree within 5%.
+
+## 8. Crown and stem rules (passed)
+
+The rules restrict where a fossil may attach: only below the crown node, or never below it. They add no density term. Proposals that would break a rule are rejected, which leaves the target distribution as the unconstrained one restricted to the allowed states. Two checks:
+
+1. **Exact conditioning test.** On the small example (`examples/example_crown_stem.txt`), the run with a crown rule (FOSSIL_1) and a stem rule (FOSSIL_3) was compared with unconstrained runs keeping only samples where both rules held. With 11 seeds per side and 100,001 samples each, the rules held in every sample of the constrained runs. All quantities agreed within 1.4 standard errors (`validation/crown_stem_test_11seeds.txt`). A crown-only test with 2 seeds also agreed. `--check` runs, which validate the full state after every proposal, raised no error.
+2. **Regression.** With no crown or stem rules, the new version gives byte-identical log and tree files to the previous release on A06, A12, bears and catfish, with and without DNA (`validation/regression_previous_release.txt`).
 
 ## Speed
 
