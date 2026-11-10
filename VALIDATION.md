@@ -12,7 +12,7 @@ Data sets: two small fish clades (A06: 24 living species and 10 fossils; A12: 22
 | 2 | Simulation-based calibration and analytic prior | Passed |
 | 3 | Agreement with RevBayes, sampled-ancestor changes off | Passed |
 | 4 | Agreement with RevBayes, sampled-ancestor changes on | Does not match (section 4) |
-| 5 | Fast FBD against full-DNA FBD | Passed |
+| 5 | Fast FBD against full-DNA FBD | Preliminary: agrees, full-DNA chains not yet well converged |
 | 6 | Catfish comparison | Close, not identical (section 6) |
 | 7 | Convergence on large trees | Passed |
 | 8 | Crown and stem rules | Passed |
@@ -71,7 +71,7 @@ Three results support this: the probabilities are identical (section 1), the agr
 
 RevBayes node-age ESS was low on these runs (32 to 35 per chain on the Fast FBD runs), so part of each difference is RevBayes sampling noise.
 
-## 5. Fast FBD against full-DNA FBD (passed)
+## 5. Fast FBD against full-DNA FBD (preliminary)
 
 RevBayes 1.3.2 full-DNA FBD and `ffbd` Fast FBD on A06 and A12, two chains each, same fossils, priors and uniform root prior. The RevBayes collapse-expand move is removed (section 4), so the only remaining difference is the branch-length approximation. Each side was summarized as an extant time tree (median node ages), and nodes were matched by clade (`scripts/branch_scatter.py --ages-only`; `validation/node_ages_full_vs_fast.tsv`).
 
@@ -79,6 +79,8 @@ RevBayes 1.3.2 full-DNA FBD and `ffbd` Fast FBD on A06 and A12, two chains each,
 |---|---|---|---|---|---|
 | A06 | 23 | 0.998 | 1.5% | +0.5 Myr | 75.1 vs 75.2 Ma |
 | A12 | 21 | 0.999 | 2.7% | -0.3 Myr | 139.1 vs 139.0 Ma |
+
+**Convergence of the full-DNA side (preliminary).** Two chains of 250,000 generations each (about 25 h for A06, 22 h for A12). Data: A06 24 living species, 10 fossils; A12 22 living species, 14 fossils; 16,107 aligned sites each. Effective sample sizes are low for node ages (A06: median 19, lowest 10; A12: median 35, lowest 14; root age 51 to 52 for A06, 557 to 1,531 for A12), and the two full-DNA chains differ by 1.6% (A06) and 4.7% (A12) in median node ages (largest 6.6% and 15.3%). Fast FBD chains reach ESS of several hundred. The agreement in the table above is therefore within the noise of the full-DNA runs. Longer full-DNA chains are planned before this test is called passed.
 
 ## 6. Catfish (close, not identical)
 
