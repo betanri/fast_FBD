@@ -82,7 +82,7 @@ RevBayes 1.3.2 full-DNA FBD and `ffbd` Fast FBD on A06 and A12, two chains each,
 
 ## 6. Catfish (close, not identical)
 
-`ffbd` Fast FBD against the original full analysis of the same data: 1,106 branches, r = 0.956 (log scale), median difference 10.9%, 45% within 10%. The original analysis used an uncorrelated lognormal clock in RevBayes with the collapse-expand move, so it is not a like-for-like comparison. The differences are largest on short branches.
+`ffbd` Fast FBD against the original full analysis of the same data: 1,106 branches, r = 0.958 (log scale), median difference 10.6%, 46% within 10%; node ages r = 0.994, Fast 1.8 Myr younger on average. Fast FBD ages come from all logged samples of both chains. The original analysis used an uncorrelated lognormal clock in RevBayes with the collapse-expand move, so it is not a like-for-like comparison. The differences are largest on short branches.
 
 ## 7. Convergence on large trees (passed)
 

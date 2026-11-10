@@ -1,4 +1,4 @@
 set	n_branches	r_log	median_abs_pct	share_within_10pct	median_full_Myr	median_fast_Myr
 Gobiaria	46	0.9984	2.93	0.913	26.282	27.257
 Protacanthopterygii	42	0.9959	2.94	0.905	24.308	25.055
-Catfishes	1106	0.9558	10.92	0.448	8.619	7.936
+Catfishes	1106	0.9577	10.56	0.461	8.619	7.916
