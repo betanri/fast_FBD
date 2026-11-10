@@ -1,0 +1,2 @@
+Regression check, 10 Nov 2026: the crown/stem version against the previous release, same seed, 2e7 proposals, no crown or stem rules.
+log and trees files byte-identical for: A06 fast, A06 prior only, A12 fast, A12 prior only, bears fast, bears prior only, catfish fast, catfish prior only.

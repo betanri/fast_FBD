@@ -169,12 +169,16 @@ for x in nodes:
             x["sa"] = 1
             sa_count += 1
 
-def tipset(n):
-    if not n["ch"]:
-        return {n["name"]}
-    return set().union(*[tipset(c) for c in n["ch"]])
-for x in nodes:
-    x["tips"] = tipset(x)
+def _post(root):
+    out, st = [], [root]
+    while st:
+        n = st.pop()
+        out.append(n)
+        st.extend(n["ch"])
+    return out[::-1]
+# tip sets bottom-up once (the old recursive version recomputed every subtree for every node: hours on 25k tips)
+for x in _post([n for n in nodes if n["parent"] is None][0]):
+    x["tips"] = frozenset([x["name"]]) if not x["ch"] else frozenset().union(*[c["tips"] for c in x["ch"]])
 
 # ---- constraints ----
 cons = []
@@ -232,9 +236,9 @@ for name, s in cons:
 cons = [(nm, s) for s, nm in uniq.items()]
 
 # check the initial tree satisfies the constraints
-tsets = [x["tips"] for x in nodes]
+tsets = {x["tips"] for x in nodes}
 for name, s in cons:
-    if set(s) not in tsets:
+    if frozenset(s) not in tsets:
         sys.exit("initial tree violates constraint " + name)
 
 # ---- extant nodes and branches ----
@@ -267,16 +271,24 @@ for k in defs:
 ext_ids = {}
 ext_nodes = []
 exset = set(extant)
+# MRCA lookup: the MRCA of an extant clade is the smallest internal node whose extant tips are exactly that clade
+by_ext = {}
+for x in nodes:
+    if x["ch"]:
+        k = frozenset(x["tips"] & exset)
+        if k not in by_ext or len(x["tips"]) < len(by_ext[k]["tips"]):
+            by_ext[k] = x
 for nm in ordered:
     if "clade_" + nm not in defs:
         continue
     s = defs["clade_" + nm]
     # MRCA of the clade's extant tips, restricted to extant taxa (fossil constraint nodes are not extant nodes)
     target = s & exset
-    best = None
-    for x in nodes:
-        if x["ch"] and target <= (x["tips"] & exset) and (best is None or len(x["tips"]) < len(best["tips"])):
-            best = x
+    best = by_ext.get(frozenset(target))
+    if best is None:  # not an exact extant clade: fall back to the full search
+        for x in nodes:
+            if x["ch"] and target <= (x["tips"] & exset) and (best is None or len(x["tips"]) < len(best["tips"])):
+                best = x
     if best is None:
         sys.exit("extant node not found: " + nm)
     ext_nodes.append((best["id"], nm))
@@ -368,6 +380,26 @@ if clock_init is None:
         if m:
             clock_init = float(m.group(1))
 
+# ---- crown option: crown.tsv (fossil<TAB>extant node name, e.g. n123): the fossil may attach only below that extant node ----
+crown, stem = [], []
+byname = {x["name"]: x for x in nodes if not x["ch"]}
+for kind, dst in (("crown", crown), ("stem", stem)):
+    if not os.path.exists(d + "/%s.tsv" % kind):
+        continue
+    for ln in rd("%s.tsv" % kind).splitlines():
+        if not ln.strip() or ln.startswith("#"):
+            continue
+        fname, nm = ln.split("\t")[:2]
+        if fname not in name2id or nm not in ext_ids:
+            sys.exit("%s entry unknown: %s" % (kind, ln))
+        v = ext_ids[nm]
+        u = byname[fname]["parent"]
+        while u is not None and u["id"] != v:
+            u = u["parent"]
+        if (u is None) == (kind == "crown"):
+            sys.exit("initial tree breaks the %s rule of %s" % (kind, fname))
+        dst.append((name2id[fname], v))
+
 # ---- write ----
 with open(a.out, "w") as f:
     f.write("FFBD 1\n")
@@ -408,5 +440,10 @@ with open(a.out, "w") as f:
             f.write("%d %.17g %.17g\n" % (v, lo, hi))
     if a.mode == "fast" and init_rates is not None:
         f.write("init_rates %d\n%s\n" % (K, " ".join("%.17g" % r for r in init_rates)))
+    for kind, lst in (("crown", crown), ("stem", stem)):
+        if lst:
+            f.write("%s %d\n" % (kind, len(lst)))
+            for fid, v in lst:
+                f.write("%d %d\n" % (fid, v))
 print("wrote", a.out, ": extant", len(extant), "fossils", len(fossils), "constraints", len(cons), "extant nodes", len(ext_nodes),
       "branches", K, "terms", len(terms), "SA in start", sa_count)

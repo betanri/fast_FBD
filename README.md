@@ -2,7 +2,7 @@
 
 A fast Bayesian program for dating phylogenies with fossils, using the **fossilized birth-death (FBD)** process.
 
-> **Status: research software, validation in progress.** The math and sampling have passed strict tests. The comparison with full-DNA analyses is still running. See [Validation status](#validation-status) before using results.
+> **Status: research software.** The math and sampling have passed strict tests, and Fast FBD matches full-DNA FBD on two test clades. See [Validation](#validation) before using results.
 
 ## What it does
 
@@ -66,11 +66,21 @@ Run at least two chains with different `--seed` values and check that they agree
 | Branch lengths and their standard errors | For example ML branch lengths on the fixed tree, with bootstrap standard errors |
 | Fossil list | Name, minimum and maximum age |
 | Clade constraints | Which fossils belong in which clades |
+| Crown or stem rules (optional) | Fossils that must sit inside a crown, or on its stem only (see below) |
 | Sampling fraction (rho) | Share of living species included |
 | Root age prior | `uniform MIN MAX`, `soft MIN MAX SD P` (soft bounds) or `normal MEAN SD` |
 | A valid starting tree | With fossils attached, and consistent with the constraints |
 
 These go in one text file. `examples/example_input.txt` shows every section: the settings, then `tips`, `initial_tree`, `constraints`, `extant_nodes`, `branches` and `terms`. If your inputs are already in RevBayes-style files, `scripts/ffbd_convert.py` builds this file for you.
+
+### Crown and stem rules
+
+A clade constraint says a fossil belongs to a group, and that includes the group's stem. Two optional sections narrow this:
+
+- `crown K` followed by K lines `fossil node`: the fossil may attach only below that extant node, inside the crown. The crown node must then be at least as old as the fossil.
+- `stem K` followed by K lines `fossil node`: the fossil may not attach below that extant node. Its clade constraint keeps it in the total group, so it sits on the stem.
+
+`fossil` is the tip index and `node` the extant node index used in the input file. The converter reads them from `crown.tsv` and `stem.tsv` (fossil name, extant node name) in the input folder. The rules only restrict where a fossil can attach; they add no age prior. `examples/example_crown_stem.txt` shows both.
 
 ## Main options
 
@@ -93,9 +103,9 @@ These go in one text file. `examples/example_input.txt` shows every section: the
 - Clock: one rate per branch of the living-species tree, exponential by default or uncorrelated lognormal.
 - Data: for each branch, observed length ~ Normal(rate x time, standard error). The two branches at the root share one observation.
 
-## Validation status
+## Validation
 
-Full details and result files are in [VALIDATION.md](VALIDATION.md). Status as of 9 November 2026.
+Full details and result files are in [VALIDATION.md](VALIDATION.md) and `validation/`. Status as of 10 November 2026.
 
 | Test | Result |
 |---|---|
@@ -105,9 +115,16 @@ Full details and result files are in [VALIDATION.md](VALIDATION.md). Status as o
 | Internal consistency and exact restart from a checkpoint | **Passed** |
 | Agreement with RevBayes with sampled-ancestor changes switched off | **Passed**: node ages differ by 0.3 to 0.4% (median) |
 | Agreement with RevBayes with sampled-ancestor changes switched on | **Does not match**, apparently because of a RevBayes move; see below |
-| Fast FBD against full-DNA FBD, two fish clades | **Running** |
-| Comparison on a large catfish data set (713 living tips, 94 fossils) | **Running** |
-| Convergence on large trees | **Running** |
+| Fast FBD against full-DNA FBD (RevBayes, that move removed), two fish clades | **Passed**: branch lengths in time differ by 2.9% (median), r = 0.998 and 0.996; root ages 75.2 vs 75.1 Ma and 139.0 vs 139.1 Ma |
+| Catfish data set (713 living tips, 94 fossils) against the original full analysis | **Close, not identical**: branch lengths r = 0.956, median difference 10.9%. The original used a lognormal clock and the RevBayes move above, so some difference is expected |
+| Convergence on large trees (1,185 and 2,424 tips) | **Passed**: after 20 billion proposals, main-parameter ESS 500 to 800; two chains agree on node ages to 0.9% (median) |
+| Crown and stem rules (new) | **Passed**: an exact conditioning test (below); runs without these rules are byte-identical to the previous release |
+
+![Branch lengths in time, full-DNA FBD against Fast FBD](validation/branch_lengths_full_vs_fast.png)
+
+*Each point is one branch of the extant time tree (fossils pruned; median node ages), matched by its clade and parent clade. Gobiaria and Protacanthopterygii: full-DNA FBD in RevBayes 1.3.2 with `mvCollapseExpandFossilBranch` removed, against `ffbd` on the same data, priors and fossils. Catfishes: the original published-style full analysis against `ffbd`. Dashed line: equal lengths.*
+
+**Crown and stem test.** On the small example (4 living species, 3 fossils), FOSSIL_1 was given a crown rule and FOSSIL_3 a stem rule on the same node. The run with these rules was compared with unconstrained runs kept only where both rules happened to hold (10.3% of samples). If the rules are implemented correctly, the two must give the same distribution. With 11 seeds per side, the rules held in all 1,100,011 samples. Every quantity agreed within 1.4 standard errors: speciation, extinction, fossil sampling, number of sampled ancestors and all three node ages (`validation/crown_stem_test_11seeds.txt`).
 
 ### A difference from RevBayes
 
