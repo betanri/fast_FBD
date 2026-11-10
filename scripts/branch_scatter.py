@@ -28,6 +28,53 @@ def branches(path):
     return out
 
 
+def branches_from_logs(spec):
+    """spec = 'ffbdlog:INPUT.txt:LOG1,LOG2': node ages from the ffbd log files (every logged sample, 10% burn-in per chain),
+    clades from the extant nodes of the ffbd input file. Uses far more samples than the saved trees."""
+    _, inp, logs = spec.split(':', 2)
+    L = open(inp).read().split('\n')
+    i = L.index(next(l for l in L if l.startswith('tips ')))
+    nt = int(L[i].split()[1]); name = {}
+    for l in L[i + 1:i + 1 + nt]:
+        p = l.split(); name[int(p[0])] = (p[1], p[2])
+    j = L.index(next(l for l in L if l.startswith('initial_tree ')))
+    nn = int(L[j].split()[1]); kids = {}
+    for l in L[j + 1:j + 1 + nn]:
+        p = l.split(); v, a, b = int(p[0]), int(p[2]), int(p[3])
+        if a >= 0: kids[v] = (a, b)
+    k = L.index(next(l for l in L if l.startswith('extant_nodes ')))
+    ext = {int(l.split()[0]): l.split()[1] for l in L[k + 1:k + 1 + int(L[k].split()[1])]}
+    tipset = {}
+    def tips(v):
+        if v not in tipset:
+            tipset[v] = frozenset([name[v][0]]) if v not in kids else (tips(kids[v][0]) | tips(kids[v][1]))
+        return tipset[v]
+    ext_tips = {v: frozenset(x for x in tips(v) if name_type[x] == 'E') for v in ext} if False else None
+    etype = {nm: t for nm, t in name.values()}
+    clade = {nm: frozenset(x for x in tips(v) if etype[x] == 'E') for v, nm in ext.items()}
+    vals = {nm: [] for nm in ext.values()}
+    for lf in logs.split(','):
+        rows = [l.rstrip('\n').split('\t') for l in open(lf)]
+        h, rows = rows[0], rows[1:]
+        rows = rows[len(rows) // 10:]
+        for nm in vals:
+            c = h.index('age_' + nm)
+            vals[nm] += [float(r[c]) for r in rows if len(r) == len(h)]
+    age = {clade[nm]: st.median(v) for nm, v in vals.items()}
+    out = {}
+    for cl, a in age.items():  # parent = smallest strictly larger extant clade
+        par = min((c for c in age if cl < c), key=len, default=None)
+        if par is not None:
+            out[(cl, par)] = age[par] - a
+        if True:
+            pass
+    for nm_, t in etype.items():  # terminal branches: tip age 0
+        if t == 'E':
+            s = frozenset([nm_]); par = min((c for c in age if s < c), key=len)
+            out[(s, par)] = age[par]
+    return out
+
+
 args = sys.argv[1:]
 png, tsv, sets = args[0], args[1], [args[i:i + 3] for i in range(2, len(args), 3)]
 fig, axes = plt.subplots(1, len(sets), figsize=(4.6 * len(sets), 4.6))
@@ -35,7 +82,8 @@ axes = axes if len(sets) > 1 else [axes]
 with open(tsv, 'w') as fh:
     fh.write('set\tn_branches\tr_log\tmedian_abs_pct\tshare_within_10pct\tmedian_full_Myr\tmedian_fast_Myr\n')
     for ax, (name, fast, full) in zip(axes, sets):
-        a, b = branches(fast), branches(full)
+        a = branches_from_logs(fast) if fast.startswith('ffbdlog:') else branches(fast)
+        b = branches(full)
         keys = [k for k in a if k in b and a[k] > 1e-3 and b[k] > 1e-3]
         x = [b[k] for k in keys]; y = [a[k] for k in keys]
         lx, ly = [math.log(v) for v in x], [math.log(v) for v in y]
