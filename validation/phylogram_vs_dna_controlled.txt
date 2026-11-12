@@ -1,0 +1,34 @@
+A06: full-DNA reference, 6 RevBayes chains, 67506 samples after 10% burn-in each; root 75.18 Ma, mean clock rate x1000 4.220
+arm            nodes      r   med %   max %   <20Ma % mean dMyr    in95  width    root  rate e3
+fullDNA noise     23 0.9976    1.46   11.91       nan     +0.87  23/23    0.99   75.38    4.171
+orig23            23 0.9994    1.18    4.78       nan     +0.51  23/23    0.99   75.26    3.954
+g23               23 0.9993    1.02    4.60       nan     +0.47  23/23    0.99   75.18    3.954
+allgene           23 0.9953    6.33   26.77       nan     -2.74  23/23    0.96   75.40    4.185
+allgene_rule      23 0.9957    6.00   26.78       nan     -2.68  23/23    0.97   75.37    4.205
+large_tree_a            23 0.9940    8.06   38.67       nan     -3.83  23/23    0.95   75.39    5.306
+large_tree_b               23 0.9940    8.06   38.67       nan     -3.83  23/23    0.95   75.39    5.306
+  (r, median and largest % difference of node-age medians against full DNA; <20Ma: median % on nodes under 20 Ma; in95: arm median inside the full-DNA 95% interval; width: interval width ratio, median over nodes)
+
+A06: branch-length inputs, edge by edge against the 23-gene ML lengths (g23)
+input     tree length  log r ratio med short log r short ratio SE/b med   (short = 3 edges under 0.01 subs/site in g23)
+g23            3.1701  1.000     1.000       1.000       1.000    0.116
+allgene        2.6177  0.808     0.867       0.988      13.062    0.023
+large_tree_a         3.1138  0.796     1.129       0.998      16.259    0.001
+large_tree_b            3.1138  0.796     1.129       0.998      16.259    0.001
+A12: full-DNA reference, 6 RevBayes chains, 67506 samples after 10% burn-in each; root 138.89 Ma, mean clock rate x1000 1.497
+arm            nodes      r   med %   max %   <20Ma % mean dMyr    in95  width    root  rate e3
+fullDNA noise     21 0.9997    3.21   12.02      7.50     -1.43  21/21    0.99  138.80    1.514
+orig23            21 0.9999    1.49    4.60      3.13     +0.70  21/21    1.01  139.12    1.445
+g23               21 0.9999    1.50    3.42      1.69     +0.65  21/21    1.00  138.99    1.441
+allgene           21 0.9974    5.00   46.15     29.66     -2.50  21/21    0.97  139.39    1.156
+allgene_rule      21 0.9974    4.74   45.64     29.61     -2.45  21/21    0.97  139.49    1.165
+large_tree_a            21 0.9981    8.81   48.62     26.06     -3.66  21/21    0.95  139.39    1.347
+large_tree_b               21 0.9981    8.81   48.62     26.06     -3.66  21/21    0.95  139.39    1.347
+  (r, median and largest % difference of node-age medians against full DNA; <20Ma: median % on nodes under 20 Ma; in95: arm median inside the full-DNA 95% interval; width: interval width ratio, median over nodes)
+
+A12: branch-length inputs, edge by edge against the 23-gene ML lengths (g23)
+input     tree length  log r ratio med short log r short ratio SE/b med   (short = 4 edges under 0.01 subs/site in g23)
+g23            1.5374  1.000     1.000       1.000       1.000    0.121
+allgene        1.1689  0.906     0.687       0.106       0.641    0.019
+large_tree_a         1.3561  0.894     0.784       0.967       0.679    0.003
+large_tree_b            1.3561  0.894     0.784       0.967       0.679    0.003

@@ -2,7 +2,7 @@
 """Compare the fixed-rate prior runs of ffbd, MrBayes and RevBayes (make_fixed3.py): extant node ages, fossil ages and the number of
 sampled ancestors. MrBayes trees (.t) are read directly (sampled ancestor = fossil tip with zero branch length).
 
-  compare_fixed3.py SET LOCALDIR      LOCALDIR holds v3_SET_r{1,2}.log (ffbd), v3rb_SET_r{1,2}.log (RevBayes), v3mb_SET_r{1,2}.t (MrBayes)
+  compare_fixed3.py SET LOCALDIR [OUT.tsv]   OUT.tsv: per node and program, median and 95% interval; LOCALDIR holds v3_SET_r{1,2}.log (ffbd), v3rb_SET_r{1,2}.log (RevBayes), v3mb_SET_r{1,2}.t (MrBayes)
 """
 import csv, re, statistics, sys
 
@@ -96,3 +96,15 @@ worst = sorted(clades, key=lambda k: -pct(med(pool['rb'][k]), med(pool['mb'][k])
 print('  largest RevBayes-MrBayes differences (median age ffbd / MrBayes / RevBayes):')
 for k in worst:
     print(f'    {k} ({len(clades[k])} tips): {med(pool["ffbd"][k]):.2f} / {med(pool["mb"][k]):.2f} / {med(pool["rb"][k]):.2f}')
+
+if len(sys.argv) > 3:
+    qq = lambda v, a: sorted(v)[int(a * (len(v) - 1))]
+    with open(sys.argv[3], 'w') as fh:
+        fh.write('set\tnode\ttips\tprogram\tmedian\tlo95\thi95\n')
+        for k in clades:
+            for p in ('ffbd', 'mb', 'rb'):
+                v = pool[p][k]
+                fh.write(f'{S}\t{k}\t{len(clades[k])}\t{p}\t{med(v):.4f}\t{qq(v, .025):.4f}\t{qq(v, .975):.4f}\n')
+        for p in ('ffbd', 'mb', 'rb'):
+            for c in range(0, 1 + int(max(pool[p]['num_samp_anc']))):
+                fh.write(f'{S}\tnum_samp_anc={c}\t\t{p}\t{sum(1 for x in pool[p]["num_samp_anc"] if x == c) / len(pool[p]["num_samp_anc"]):.5f}\t\t\n')

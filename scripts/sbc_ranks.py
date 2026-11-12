@@ -4,7 +4,7 @@ thinned to 99 draws, rank of the true value among them (0..99, ties at random). 
 chi-square test on 20 bins, the mean rank (0.5 expected) and the share of ranks in the outer 5% on each side (0.05 expected; too many =
 intervals too narrow, too few = too wide; a lopsided split = bias). Also the median ESS of each parameter (draws must be near independent).
 
-  sbc_ranks.py SBCDIR
+  sbc_ranks.py SBCDIR [OUT.tsv]      (OUT.tsv: one row per replicate and parameter: parameter, rank 0..99)
 """
 import csv, glob, math, os, random, statistics, sys
 
@@ -95,3 +95,10 @@ for p in PAR:
     chi = sum((b - e) ** 2 / e for b in bins)
     print(f'{p:18} {len(r):4d} {chisq_sf(chi, 19):8.4f} {statistics.fmean(r) / K:9.3f} {sum(x < 5 for x in r) / len(r):7.3f} '
           f'{sum(x > K - 5 for x in r) / len(r):7.3f} {statistics.median(esses[p]):10.0f}')
+
+if len(sys.argv) > 2:
+    with open(sys.argv[2], 'w') as fh:
+        fh.write('parameter\trank\n')
+        for p in PAR:
+            for x in ranks[p]:
+                fh.write(f'{p}\t{x}\n')
