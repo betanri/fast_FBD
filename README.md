@@ -146,6 +146,14 @@ The full-DNA ESS values are low, so the agreement shown below is within the nois
 
 **Crown and stem test.** On the small example (4 living species, 3 fossils), FOSSIL_1 was given a crown rule and FOSSIL_3 a stem rule on the same node. The run with these rules was compared with unconstrained runs kept only where both rules happened to hold (10.3% of samples). If the rules are implemented correctly, the two must give the same distribution. With 11 seeds per side, the rules held in all 1,100,011 samples. Every quantity agreed within 1.4 standard errors: speciation, extinction, fossil sampling, number of sampled ancestors and all three node ages (`validation/crown_stem_test_11seeds.txt`).
 
+## Bottom line: ffbd, MrBayes, RevBayes and BEAST2
+
+- **`ffbd` and MrBayes agree.** Two independently written programs, given the same tree, fossils and fixed rates, give the same node ages (within about 0.5%) and the same number of sampled ancestors (7.01 vs 7.02; 9.55 vs 9.58).
+- **RevBayes 1.3.2 disagrees with both.** It finds about one extra sampled ancestor and makes young nodes older, by up to a third on some two-species nodes. With one RevBayes move switched off (`mvCollapseExpandFossilBranch`), RevBayes agrees with `ffbd` (0.3 to 0.4%). Our reading is that this move is not reversible when fossils have age ranges. The RevBayes developers have not yet confirmed this.
+- **BEAST2 was not run.** `ffbd` keeps the tree of living species fixed while each fossil moves freely within its clade. BEAST2's sampled-ancestor package cannot express that, because its clade constraints count fossils as clade members. A BEAST2 run would therefore be a different model, not a check of this one, so MrBayes was used as the independent program.
+- **`ffbd` recovers known truth.** On 500 simulated data sets with trees of up to 8,056 living species, the true values sit where they should in `ffbd`'s estimates. On 100 simulated DNA data sets, node and fossil ages have close to 95% coverage.
+- **Practical meaning.** For FBD analyses with fossil age ranges and sampled ancestors, `ffbd` and MrBayes give the same answer. RevBayes 1.3.2 with its default moves can give more sampled ancestors and older young nodes.
+
 ### A difference from RevBayes
 
 `ffbd` and RevBayes 1.3.2 give different posteriors when fossils have age ranges and sampled ancestors can be added or removed. The evidence points to the RevBayes move `mvCollapseExpandFossilBranch`. In the 1.3.2 source, it draws the new attachment age above the *maximum* of the fossil's age window, while the reverse move can start from attachments inside the window. Those states can be left but not re-entered in the same way, so the move is not reversible.

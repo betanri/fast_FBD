@@ -20,6 +20,14 @@ Data sets: two small fish clades (A06: 24 living species and 10 fossils; A12: 22
 | 10 | Simulation study, 100 trees of 30 to 120 tips | Node and fossil ages near 95% coverage; speciation and extinction under-covered (explained by test 11) |
 | 11 | Simulation-based calibration at realistic size (500 replicates, up to 8,056 tips) | Passed |
 
+## Bottom line: ffbd, MrBayes, RevBayes and BEAST2
+
+- **`ffbd` and MrBayes agree.** Two independently written programs, given the same tree, fossils and fixed rates, give the same node ages (within about 0.5%) and the same number of sampled ancestors (7.01 vs 7.02; 9.55 vs 9.58).
+- **RevBayes 1.3.2 disagrees with both.** It finds about one extra sampled ancestor and makes young nodes older, by up to a third on some two-species nodes. With one RevBayes move switched off (`mvCollapseExpandFossilBranch`), RevBayes agrees with `ffbd` (0.3 to 0.4%). Our reading is that this move is not reversible when fossils have age ranges. The RevBayes developers have not yet confirmed this.
+- **BEAST2 was not run.** `ffbd` keeps the tree of living species fixed while each fossil moves freely within its clade. BEAST2's sampled-ancestor package cannot express that, because its clade constraints count fossils as clade members. A BEAST2 run would therefore be a different model, not a check of this one, so MrBayes was used as the independent program.
+- **`ffbd` recovers known truth.** On 500 simulated data sets with trees of up to 8,056 living species, the true values sit where they should in `ffbd`'s estimates. On 100 simulated DNA data sets, node and fossil ages have close to 95% coverage.
+- **Practical meaning.** For FBD analyses with fossil age ranges and sampled ancestors, `ffbd` and MrBayes give the same answer. RevBayes 1.3.2 with its default moves can give more sampled ancestors and older young nodes.
+
 ## 1. Probabilities on fixed trees (passed)
 
 For fixed trees and parameter values, every term was compared with RevBayes: FBD density, root prior, rate priors, data terms and fossil windows.
