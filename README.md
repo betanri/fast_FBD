@@ -203,6 +203,17 @@ The RevBayes developers have not yet confirmed the move problem. `--rb-sa-move` 
 - **The genes behind the phylogram matter more than the shortcut** (test 4e). A phylogram from the same 23 genes reproduces the 23-gene DNA analysis. Phylograms from many more genes give ages a few million years younger, inside the 23-gene intervals.
 - **The weak spot is very young nodes**: in simulations, nodes under 5 Ma come out about 1 Myr too old, with or without the shortcut.
 
+### Why ffbd may do better than full-DNA FBD on real data
+
+Test 4e separates two questions that are usually mixed up: does the shortcut change the answer, and do the data change the answer?
+
+- **The shortcut does not change the answer.** Given a phylogram from the same 23 genes, `ffbd` reproduces full-DNA FBD on those 23 genes as closely as the DNA chains reproduce each other (tests 4a, 4e).
+- **The data do change it.** Keep the same tree, fossils and priors, and swap the 23-gene phylogram for one estimated from about 1,100 genes (about 580,000 sites). Node ages then move 2.5 to 3.8 million years younger on average, and up to 46% on some young nodes. They still stay inside the 23-gene 95% intervals.
+
+In practice, full-DNA FBD is run on a few dozen genes or fewer, because it is slow. Here, each RevBayes chain on 23 genes and about two dozen species took 22 to 25 hours and still mixed poorly (node-age ESS about 20 to 35 per chain), so six chains had to be pooled. The same analysis on 36 times more sites, or on thousands of species, is not practical. `ffbd` takes the branch lengths from whatever data set they come from, including genome-scale ones, and runs in minutes. So under real-life conditions the two approaches do not analyze the same data. Full-DNA FBD is limited to a small gene set, while `ffbd` can use branch lengths estimated from all the genes. The all-gene branch lengths are also far more precise: their standard errors are 5 to 6 times smaller relative to branch length (median SE/b about 0.02 against 0.12 for 23 genes).
+
+**What this does not show.** These are real clades, so the true ages are unknown, and test 4e cannot say which answer is right. More genes reduce sampling error in the branch lengths but not model error. For example, one substitution model is applied to all genes, and concatenation ignores gene-tree conflict. One plausible reason the all-gene trees are 17 to 24% shorter is the gene mix. The two fast-evolving mitochondrial genes (COI, CYTB) are a sizable part of the 23-gene set but less than 2% of the all-gene sites. The claim is therefore narrower than "ffbd is more accurate". The shortcut costs nothing, and it is what makes genome-scale branch lengths usable in FBD dating. A simulation that compares few-gene with many-gene branch lengths against known true ages would test whether that turns into more accurate dates.
+
 ### References
 
 - Barido-Sottani J, Aguirre-Fernández G, Hopkins MJ, Stadler T, Warnock R (2019). Ignoring stratigraphic age uncertainty leads to erroneous estimates of species divergence times under the fossilized birth-death process. *Proceedings of the Royal Society B* 286: 20190685.

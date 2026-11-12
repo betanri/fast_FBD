@@ -188,6 +188,7 @@ Each input was checked: the converter rebuilds the original 4a input exactly, an
 - **Same genes, DNA or phylogram: no difference.** With the 23-gene phylogram, ages match the 23-gene DNA analysis as closely as the DNA chains match each other.
 - **More genes give younger ages.** The all-gene and larger-tree phylograms make nodes 2.5 to 3.8 Myr younger on average, most on young nodes, but every node stays inside the 23-gene DNA 95% interval. This is a difference in the data, not in the method: the all-gene trees are 17 to 24% shorter than the 23-gene trees and have different relative branch lengths (log-log r 0.81 to 0.91 against the 23-gene lengths).
 - **The standard errors hardly matter.** Bootstrap standard errors and the large-tree rule give the same ages (within 0.3% at the median).
+- **Precision of the inputs.** Median SE/b is 0.116 (A06) and 0.121 (A12) for the 23-gene phylograms against 0.023 and 0.019 for the all-gene phylograms. Mitochondrial genes (COI, CYTB in the 23-gene set; 10 mitochondrial genes in the all-gene set) make up less than 2% of the all-gene sites. The true ages of these clades are unknown, so this test shows that the input changes the ages, not which input is more accurate (see the README, "Why ffbd may do better than full-DNA FBD on real data").
 
 ## 5. Convergence on large trees (passed)
 
