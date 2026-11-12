@@ -1,6 +1,6 @@
 # Validation of ffbd
 
-Status as of 10 November 2026. "RevBayes" means RevBayes 1.3.2. Result files are in `validation/`.
+Status as of 11 November 2026. "RevBayes" means RevBayes 1.3.2. Result files are in `validation/`.
 
 Data sets: two small fish clades (A06: 24 living species and 10 fossils; A12: 22 and 14), the RevBayes bear tutorial data, and a catfish data set (713 living tips, 94 fossils).
 
@@ -16,6 +16,9 @@ Data sets: two small fish clades (A06: 24 living species and 10 fossils; A12: 22
 | 6 | Catfish comparison | Close, not identical (section 6) |
 | 7 | Convergence on large trees | Passed |
 | 8 | Crown and stem rules | Passed |
+| 9 | Three programs on the same prior (ffbd, MrBayes 3.2.7, RevBayes) | ffbd and MrBayes agree; RevBayes differs |
+| 10 | Simulation study, 100 trees of 30 to 120 tips | Node and fossil ages near 95% coverage; speciation and extinction under-covered (explained by test 11) |
+| 11 | Simulation-based calibration at realistic size (500 replicates, up to 8,056 tips) | Passed |
 
 ## 1. Probabilities on fixed trees (passed)
 
@@ -106,6 +109,53 @@ The rules restrict where a fossil may attach: only below the crown node, or neve
 
 1. **Exact conditioning test.** On the small example (`examples/example_crown_stem.txt`), the run with a crown rule (FOSSIL_1) and a stem rule (FOSSIL_3) was compared with unconstrained runs keeping only samples where both rules held. With 11 seeds per side and 100,001 samples each, the rules held in every sample of the constrained runs. All quantities agreed within 1.4 standard errors (`validation/crown_stem_test_11seeds.txt`). A crown-only test with 2 seeds also agreed. `--check` runs, which validate the full state after every proposal, raised no error.
 2. **Regression.** With no crown or stem rules, the new version gives byte-identical log and tree files to the previous release on A06, A12, bears and catfish, with and without DNA (`validation/regression_previous_release.txt`).
+
+## 9. Three programs on the same prior (ffbd agrees with MrBayes)
+
+An independent referee for section 4. `scripts/make_fixed3.py` writes the same model for `ffbd`, MrBayes 3.2.7 and RevBayes 1.3.2: the A06 or A12 living-species tree fixed (in MrBayes, one partial constraint per living-species node, fossils free), the same clade constraints, uniform fossil age windows (MrBayes `calibrate`), speciation 0.10, extinction 0.04, fossil sampling 0.03 and the root age all **fixed**, and no data. With every rate fixed, the three programs must give the same node ages and the same number of sampled ancestors. Two chains per program and data set; comparison `scripts/compare_fixed3.py` (`validation/three_program_prior_A06_A12.txt`).
+
+| Data set | Mean sampled ancestors, ffbd / MrBayes / RevBayes | Node ages, ffbd vs MrBayes (median, largest) | RevBayes vs MrBayes (median, largest) | MrBayes chain 1 vs chain 2 (median, largest) |
+|---|---|---|---|---|
+| A06 | 7.01 / 7.02 / 7.95 | 0.36%, 2.7% | 3.2%, 34% | 0.89%, 7.4% |
+| A12 | 9.55 / 9.58 / 10.13 | 0.59%, 4.2% | 6.5%, 28.5% | 0.86%, 6.4% |
+
+`ffbd` and MrBayes agree within chain noise. RevBayes gives about one extra sampled ancestor and older young nodes (largest on two-tip nodes, for example 10.6 Ma in MrBayes and 14.2 Ma in RevBayes), the pattern expected from the move described in section 4. BEAST2 (SA package) was not used: its monophyly constraints count fossils as clade members, so it cannot hold a living-species tree fixed while fossils move.
+
+## 10. Simulation study at realistic size
+
+After Heath et al. (2014). `scripts/sim_study.py simulate` grows FBD trees forward from a known root (100 Ma; speciation 0.10, extinction 0.06, fossil sampling 0.01, extant sampling 0.5; trees kept at 30 to 120 living tips with at least 5 fossils), gives each fossil an age window of 2 to 8 Myr containing its true age and a clade constraint that is true on the true tree (the total group of the clade it attaches to, or of its parent or grandparent clade), and draws branch rates from an exponential with mean 0.004. Two versions of every tree:
+
+- **exact**: branch lengths drawn from the `ffbd` likelihood itself (tests the sampler).
+- **dna**: 2,000 sites simulated with AliSim (GTR+G4); ML branch lengths and 100 bootstrap standard errors on the true topology, exactly as for the real clades (`scripts/fish_fast.py`; tests the Fast FBD approximation).
+
+Root prior soft-bounded on 90 to 110 Ma; 200 million proposals per run; 100 trees. Scoring: `scripts/sim_study_summary.py` (`validation/sim_study_100reps.txt`). Coverage of the 95% interval:
+
+| Version | Node ages (6,911) | Fossil ages (3,631) | Root | Speciation | Extinction | Fossil sampling | Sampled ancestors | Mean clock rate |
+|---|---|---|---|---|---|---|---|---|
+| exact | 0.931 | 0.956 | 0.99 | 0.58 | 0.60 | 0.89 | 0.83 | 0.87 |
+| dna | 0.914 | 0.954 | 0.99 | 0.56 | 0.54 | 0.92 | 0.82 | 0.38 |
+
+- Node and fossil ages are close to 95% coverage, and the DNA approximation costs only 1 to 2 points.
+- Nodes younger than 5 Ma come out too old in both versions (median error +56% in exact and +59% in dna, about 1.2 Myr). The error falls with age: +10 to 12% at 15 to 30 Ma, +1 to 2% above 60 Ma. Because both versions show it, this comes from the model and prior, not from the approximation.
+- Speciation and extinction are under-covered and the dna version overestimates the mean clock rate. Section 11 shows the sampler itself is calibrated, so this comes from the design of this study: one fixed set of true values, trees kept only at 30 to 120 tips, and exponential priors that pull the rates down.
+
+## 11. Simulation-based calibration at realistic size (passed)
+
+`scripts/sim_study.py sbc`: each of 500 replicates draws speciation, extinction, fossil sampling and the mean clock rate from the `ffbd` priors (exponential, rate 10) and the root from the analysis prior Normal(30, 2), then simulates an FBD tree with no size filter. Only information that is exact for this test is used: fossil windows on a fixed 4-Myr grid, one constraint per side of the root, and a constant observation standard deviation (0.01). Trees had 2 to 8,056 living tips (median 20) and 0 to 15,838 fossils (median 25). 100 million proposals per replicate, 99 thinned draws, rank of the true value among them (`scripts/sbc_ranks.py`; `validation/sbc_realistic_500reps.txt`). With a correct sampler the ranks are uniform. Bonferroni threshold for 9 tests: p < 0.0056.
+
+| Quantity | n | Uniformity p (20 bins) | Mean rank (0.5 expected) | Median ESS |
+|---|---|---|---|---|
+| Speciation | 500 | 0.66 | 0.490 | 361 |
+| Extinction | 500 | 0.50 | 0.503 | 361 |
+| Fossil sampling | 500 | 0.65 | 0.488 | 361 |
+| Mean clock rate | 500 | 0.087 | 0.485 | 320 |
+| Root age | 500 | 0.79 | 0.493 | 361 |
+| Number of sampled ancestors | 500 | 0.91 | 0.504 | 361 |
+| Crown age, root side 1 | 407 | 0.24 | 0.522 | 172 |
+| Crown age, root side 2 | 407 | 0.17 | 0.513 | 180 |
+| One random fossil's age | 482 | 0.87 | 0.494 | 361 |
+
+All ranks are uniform: `ffbd` samples the FBD posterior correctly on trees of up to thousands of tips.
 
 ## Speed
 
