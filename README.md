@@ -165,25 +165,66 @@ The standard checks for a new Bayesian method (Cook et al. 2006; Talts et al. 20
 
 ### Figures
 
-![Node ages, full-DNA FBD against Fast FBD](validation/node_ages_full_vs_fast.png)
-
-*Tests 4a and 4d: DNA against phylogram. Each point is one node of the living-species time tree (median ages), matched by clade. Gobiaria and Protacanthopterygii: RevBayes 1.3.2 full-DNA FBD (23 genes, 16,107 sites; 6 chains; collapse-expand move removed) against `ffbd` given the phylogram from the same alignment, with the same fossils and priors. Catfishes: the earlier full-DNA RevBayes analysis (21 genes, lognormal clock, original moves) against `ffbd`. Dashed line: equal ages.*
-
-![Phylograms against 23-gene DNA](validation/phylogram_vs_dna_controlled.png)
-
-*Test 4e: DNA against several phylograms. Difference of each node's median age from the 23-gene full-DNA FBD. Grey: two halves of the DNA chains against each other (the noise floor). Blue: the phylogram from the same 23 genes. Orange: the phylogram from all genes. Green: a genome-scale phylogram of a larger tree, pruned to the clade.*
-
-![ffbd, MrBayes and RevBayes on the same prior](validation/three_programs_no_data.png)
-
-*Test 3a: no data. Top: difference of each node's median age from MrBayes. Bottom: how many fossils are sampled ancestors in each posterior tree. ffbd and MrBayes overlap; RevBayes finds more sampled ancestors and older young nodes.*
+Figures appear in test order. Each caption says what the test asks, how to read the plot, and what it shows.
 
 ![Simulation-based calibration](validation/sbc_rank_histograms.png)
 
-*Test 2b: simulated phylograms. Rank of the true value among 99 posterior draws, 500 replicates. A correct sampler gives flat histograms; dotted lines mark the range expected by chance (99%).*
+**Test 2b. Does the sampler find the right answer when the truth is known?** *Data: simulated phylograms.*
+
+- **Setup.** 500 trees (2 to 8,056 living species) were simulated with known true values: speciation, extinction, fossil sampling, clock rate, root age, number of sampled ancestors, two crown ages and one fossil age. `ffbd` was run on each tree and drew 99 posterior samples.
+- **Rank.** For each tree, the rank is how many of the 99 samples fall below the true value (0 to 99). Each bar counts how many of the 500 trees had a rank in that bin, so each panel holds one histogram per parameter.
+- **How to read.** A correct sampler puts the true value at a random place among its samples, so the bars should be **flat**. The dashed line is the expected height and the dotted lines are the 99% range for chance.
+- **Bad shapes.** Too low at both ends means intervals too narrow, a hump in the middle means too wide, and a slope means bias.
+- **Result.** All nine panels are flat within chance (every uniformity test p > 0.0056, the threshold after correcting for 9 tests).
+
+![ffbd, MrBayes and RevBayes on the same prior](validation/three_programs_no_data.png)
+
+**Test 3a. Do independent programs give the same answer for the same model?** *Data: none.*
+
+- **Setup.** All three programs got the same fixed tree of living species, the same fossils with their age windows, and the same fixed speciation, extinction, fossil sampling and root age. With no DNA and no phylogram, the result is what the FBD model alone implies. All three programs implement the same model, so they should agree. MrBayes, written independently of `ffbd`, is the reference.
+- **Top panels.** Each dot is one node. The horizontal axis is its age in MrBayes. The vertical axis is how far the other program is from MrBayes, in %; the dashed line at 0 means the same answer.
+    - Blue (`ffbd`) dots sit on the line: median 0.4% and 0.6%, about the same as two MrBayes chains differ from each other.
+    - Orange (RevBayes 1.3.2) dots are mostly above it: up to 34% older, mainly on nodes younger than 30 Ma.
+- **Bottom panels.** A sampled ancestor is a fossil placed directly on a branch, as an ancestor of later species, instead of on its own side branch. Each group of bars counts the sampled ancestors in one posterior tree; the height is the share of trees with that count.
+    - Blue (`ffbd`) and green (MrBayes) bars match.
+    - Orange (RevBayes) is shifted right, by about one extra sampled ancestor per tree.
+- **Result.** `ffbd` agrees with MrBayes; RevBayes is the odd one out. See "Why RevBayes differs" below.
+
+![Node ages, full-DNA FBD against Fast FBD](validation/node_ages_full_vs_fast.png)
+
+**Tests 4a and 4d. Does the phylogram shortcut give the same ages as running FBD on the DNA?** *Data: DNA (RevBayes full-DNA FBD) against a phylogram (`ffbd`).*
+
+- **How to read.** Each dot is one node of the living-species time tree. The horizontal axis is its age from full-DNA FBD and the vertical axis is its age from `ffbd`. Dots on the dashed diagonal mean the same age.
+- **Gobiaria and Protacanthopterygii (test 4a).** Both sides used the same 23 genes, fossils and priors. RevBayes ran the DNA (6 chains, collapse-expand move removed) and `ffbd` was given the phylogram estimated from that same alignment.
+    - Every dot sits on the line: r = 0.999 and 1.000, and `ffbd` is 0.5 and 0.7 Myr older on average, within the noise between DNA chains.
+- **Catfishes (test 4d).** An earlier full-DNA RevBayes analysis (21 genes) against `ffbd`. This is not like for like, because the earlier run used another clock and the original RevBayes moves.
+    - The dots are close but more scattered: r = 0.994, `ffbd` 1.8 Myr younger on average.
 
 ![Simulation study, coverage by node age](validation/simulation_coverage_by_age.png)
 
-*Test 4c: simulated phylograms, exact and estimated from simulated DNA. Left: share of true node ages inside the 95% interval, by true age. Right: median error of the node-age estimate. Young nodes are too old in both versions, so the cause is the model and prior, not the phylogram shortcut.*
+**Test 4c. With known true ages, are the intervals right, and are ages biased?** *Data: phylograms, exact (blue) or estimated from simulated DNA (orange).*
+
+- **Setup.** 100 simulated trees with 6,911 nodes in all. Nodes are grouped by true age along the horizontal axis; *n* is the number of nodes in each group.
+- **Left panel.** This shows how often the true age falls inside the 95% interval. The target is the dashed line at 0.95.
+    - Overall it is 93% with the exact phylogram and 91% with the phylogram estimated from DNA.
+- **Right panel.** This shows the typical error of the estimated age, in %. Above 0 means too old.
+    - Nodes younger than 5 Ma come out about 1 Myr too old.
+- **Result.** The exact and DNA-estimated lines are close. The young-node bias shows up in both, so it comes from the model and prior, not from the phylogram shortcut.
+
+![Phylograms against 23-gene DNA](validation/phylogram_vs_dna_controlled.png)
+
+**Test 4e. Does it matter which phylogram `ffbd` is given?** *Data: DNA (RevBayes, 23 genes) against several phylograms.*
+
+- **Setup.** The tree, fossils and priors are the same in every run. Only the phylogram changes.
+- **How to read.** Each dot is one node. The horizontal axis is its age from 23-gene full-DNA FBD. The vertical axis is how far each `ffbd` run is from that age, in %. Dots near 0 agree with the DNA; below 0 means younger.
+- **What the colors are.**
+    - Grey: two halves of the DNA chains against each other, the noise floor.
+    - Blue: the phylogram from the same 23 genes.
+    - Orange: the phylogram from all genes, about 580,000 sites.
+    - Green: a genome-scale phylogram of a larger tree, pruned to the clade.
+- **Result.**
+    - Blue sits with grey, so the 23-gene phylogram gives the 23-gene DNA answer.
+    - Orange and green sit lower: more genes give ages 2.5 to 3.8 Myr younger, still inside the DNA 95% intervals.
 
 ### Why RevBayes differs, and what MrBayes and BEAST2 show
 
