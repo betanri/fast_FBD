@@ -1,0 +1,11 @@
+replicates 500; extant tips median 20.0 (range 2-8056), fossils median 25.0 (range 0-15838)
+parameter             n   chi2 p mean rank  low 5% high 5% median ESS
+speciation_rate     500   0.6626     0.490   0.072   0.064        361
+extinction_rate     500   0.5012     0.503   0.040   0.056        361
+psi                 500   0.6519     0.488   0.064   0.052        361
+branch_rates_mean   500   0.0866     0.485   0.066   0.066        320
+root                500   0.7929     0.493   0.064   0.048        361
+num_samp_anc        500   0.9111     0.504   0.046   0.060        361
+sbc_side1           407   0.2363     0.522   0.052   0.052        172
+sbc_side2           407   0.1674     0.513   0.047   0.084        180
+sbc_fossil          482   0.8736     0.494   0.048   0.054        361

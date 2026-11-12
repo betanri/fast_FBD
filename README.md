@@ -105,7 +105,7 @@ A clade constraint says a fossil belongs to a group, and that includes the group
 
 ## Validation
 
-Full details and result files are in [VALIDATION.md](VALIDATION.md) and `validation/`. Status as of 10 November 2026.
+Full details and result files are in [VALIDATION.md](VALIDATION.md) and `validation/`. Status as of 11 November 2026.
 
 | Test | Result |
 |---|---|
@@ -118,6 +118,9 @@ Full details and result files are in [VALIDATION.md](VALIDATION.md) and `validat
 | Fast FBD against full-DNA FBD (RevBayes, that move removed), two fish clades | **Preliminary, agrees**: node ages r = 0.998 and 0.999, mean difference +0.5 and -0.3 Myr; root ages 75.2 vs 75.1 Ma and 139.0 vs 139.1 Ma |
 | Catfish data set (713 living tips, 94 fossils) against the original full analysis | **Close**: node ages r = 0.995, Fast 1.8 Myr younger on average. The original used a lognormal clock and the RevBayes move above, so some difference is expected |
 | Convergence on large trees (1,185 and 2,424 tips) | **Passed**: after 20 billion proposals, main-parameter ESS 500 to 800; two chains agree on node ages to 0.9% (median) |
+| Three programs on the same fixed-rate prior: `ffbd`, MrBayes 3.2.7, RevBayes 1.3.2 (new) | **`ffbd` = MrBayes**: node ages differ by 0.4 to 0.6% (median), sampled ancestors 7.01 vs 7.02 and 9.55 vs 9.58. RevBayes differs (3 to 7%, about one extra sampled ancestor) |
+| Simulation study, 100 trees of 30 to 120 tips, branch lengths from simulated DNA (new) | **Ages close to nominal**: 95% coverage 0.91 for node ages, 0.95 for fossil ages; nodes under 5 Ma about 1 Myr too old |
+| Simulation-based calibration at realistic size: 500 replicates, up to 8,056 tips (new) | **Passed**: all 9 quantities uniform (lowest p = 0.087) |
 | Crown and stem rules (new) | **Passed**: an exact conditioning test (below); runs without these rules are byte-identical to the previous release |
 
 ![Node ages, full-DNA FBD against Fast FBD](validation/node_ages_full_vs_fast.png)
@@ -147,7 +150,7 @@ The full-DNA ESS values are low, so the agreement shown below is within the nois
 
 `ffbd` and RevBayes 1.3.2 give different posteriors when fossils have age ranges and sampled ancestors can be added or removed. The evidence points to the RevBayes move `mvCollapseExpandFossilBranch`. In the 1.3.2 source, it draws the new attachment age above the *maximum* of the fossil's age window, while the reverse move can start from attachments inside the window. Those states can be left but not re-entered in the same way, so the move is not reversible.
 
-With that move removed from both programs, they agree. `ffbd` also recovers known truth in simulations. We have not yet confirmed this with the RevBayes developers. `--rb-sa-move` imitates that proposal, for testing only.
+With that move removed from both programs, they agree. An independent program, MrBayes 3.2.7, agrees with `ffbd` and not with RevBayes on the same fixed-rate prior (VALIDATION.md, section 9). `ffbd` also recovers known truth in simulations. We have not yet confirmed this with the RevBayes developers. `--rb-sa-move` imitates that proposal, for testing only.
 
 ## Known limits
 

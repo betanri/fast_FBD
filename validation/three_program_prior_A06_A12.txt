@@ -1,0 +1,28 @@
+A06: samples per chain {'ffbd_r1': 9001, 'rb_r1': 13501, 'mb_r1': 18001, 'ffbd_r2': 9001, 'rb_r2': 13501, 'mb_r2': 18001}
+  node-age medians, ffbd vs mb: median 0.36%  max 2.74%
+  node-age medians, rb vs mb: median 3.16%  max 34.02%
+  node-age medians, ffbd vs rb: median 3.15%  max 24.26%
+  ffbd chain 1 vs chain 2: median 0.21%  max 4.88%
+  mb chain 1 vs chain 2: median 0.89%  max 7.42%
+  rb chain 1 vs chain 2: median 0.92%  max 6.28%
+  mean sampled ancestors: ffbd 7.009  mb 7.015  rb 7.945
+  largest RevBayes-MrBayes differences (median age ffbd / MrBayes / RevBayes):
+    n3 (2 tips): 10.79 / 10.63 / 14.24
+    n6 (2 tips): 11.62 / 11.55 / 14.22
+    n8 (2 tips): 9.30 / 9.39 / 11.50
+    n4 (2 tips): 10.53 / 10.64 / 12.23
+    n1 (2 tips): 10.89 / 10.86 / 12.45
+A12: samples per chain {'ffbd_r1': 9001, 'rb_r1': 13501, 'mb_r1': 18001, 'ffbd_r2': 9001, 'rb_r2': 13501, 'mb_r2': 18001}
+  node-age medians, ffbd vs mb: median 0.59%  max 4.16%
+  node-age medians, rb vs mb: median 6.53%  max 28.52%
+  node-age medians, ffbd vs rb: median 4.40%  max 18.96%
+  ffbd chain 1 vs chain 2: median 0.38%  max 1.83%
+  mb chain 1 vs chain 2: median 0.86%  max 6.37%
+  rb chain 1 vs chain 2: median 0.54%  max 4.93%
+  mean sampled ancestors: ffbd 9.547  mb 9.580  rb 10.131
+  largest RevBayes-MrBayes differences (median age ffbd / MrBayes / RevBayes):
+    n1 (2 tips): 9.75 / 9.36 / 12.03
+    n9 (3 tips): 19.55 / 19.44 / 23.64
+    n5 (2 tips): 10.38 / 10.32 / 12.36
+    n8 (3 tips): 25.46 / 25.45 / 29.78
+    n7 (2 tips): 8.87 / 8.80 / 10.09
