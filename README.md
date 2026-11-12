@@ -107,6 +107,27 @@ A clade constraint says a fossil belongs to a group, and that includes the group
 
 Status as of 12 November 2026. Details, numbers and result files: [VALIDATION.md](VALIDATION.md) and `validation/`.
 
+### In plain language
+
+`ffbd` puts ages on the nodes of a phylogeny using fossils. It uses the fossilized birth-death (FBD) model, which treats the origin of species, their extinction and the preservation of fossils as one process. Each fossil has an age range, and the program works out where on the tree each fossil fits. The tree of living species stays fixed. The program never reads the DNA itself. Instead it reads a phylogram: the branch lengths of that fixed tree, estimated once from the DNA, each with a standard error (SE). This shortcut is what lets it date trees of thousands of species in hours rather than months. Because the method is new, it has to earn trust. The validation follows the standard recipe for Bayesian software (Cook et al. 2006; Talts et al. 2018; Mendes et al. 2025) and for FBD simulation studies (Heath et al. 2014; Barido-Sottani et al. 2019). That recipe asks four questions. Each test is labeled by the data it uses: no data (fossils and priors only), a phylogram, or the full DNA.
+
+**Does it compute the right probabilities?** For fixed trees and settings, every term was compared with RevBayes, the established FBD program. The totals matched to within 4e-9, which is rounding error (test 1).
+
+**Does it explore those probabilities correctly?** Hundreds of data sets were simulated with known true answers, to check that the truth lands where it should among the program's estimates. This check is simulation-based calibration (SBC). It passed on small trees, on realistic trees of up to 8,056 living species, and on a 3-species case with an exact answer (tests 2a to 2c).
+
+**Does it agree with other programs given the same model?** With no data and the same fixed rates, `ffbd` and MrBayes gave the same node ages (within about 0.5%) and the same number of sampled ancestors (test 3a). The two programs were written completely independently. Sampled ancestors are fossils that sit directly on a branch rather than on a side branch. RevBayes disagreed with both: it found about one extra sampled ancestor and made young nodes up to a third older. The likely cause is one RevBayes move, `mvCollapseExpandFossilBranch`, which is not reversible when fossils have age ranges. With that move switched off, RevBayes agrees with `ffbd` (test 3b). The RevBayes developers have not yet confirmed the problem. BEAST2 was not used, because it cannot hold the living-species tree fixed while fossils move, so it would be testing a different model.
+
+**Does the phylogram shortcut give the same answer as analyzing the full DNA?** This is the question that matters most in practice.
+- **Same DNA (test 4a).** On two fish clades, RevBayes analyzed the full 23-gene DNA in 6 long chains each, while `ffbd` got the phylogram from that same DNA. The ages agreed to 1.3 to 1.8% at the median. That is no larger than the differences between the DNA chains themselves.
+- **MrBayes (test 4b).** A second, independent DNA check in MrBayes is running. It uses a slightly different clock, because MrBayes does not offer the one `ffbd` uses.
+- **Simulated DNA (test 4c).** On 100 simulated trees, the true ages fell inside the 95% interval 91% of the time with the shortcut and 93% without it.
+- **Catfishes (test 4d).** `ffbd` came close to an earlier full-DNA analysis, but that comparison is not like for like.
+- **Controlled test (test 4e).** Everything stayed identical except the phylogram. A phylogram from the same 23 genes reproduced the 23-gene DNA result. Phylograms built from about 1,100 genes, or taken from a larger genome-scale tree, gave ages 2.5 to 3.8 million years younger on average, still inside the DNA uncertainty. How the SEs were computed made no difference.
+
+Two further checks passed. Very large runs converged, with two independent chains agreeing (test 5). The optional rules that force a fossil inside or outside a crown group behave exactly as intended (test 6).
+
+**What it all means.** The program does the math correctly, explores it correctly and agrees with an independent program. The phylogram shortcut costs essentially nothing compared with analyzing the same DNA. Which genes the branch lengths come from matters more than the shortcut. The known weak spot is shared with full-DNA FBD: very young nodes, under about 5 million years, tend to come out roughly 1 million years too old. This comes from the model and its priors, not from `ffbd` or its shortcut.
+
 ### What kind of data each test uses
 
 `ffbd` never reads DNA. Its data are a **phylogram**: the branch lengths of the fixed tree, in substitutions per site, each with a standard error, estimated once from the DNA. Every test below says which of three kinds of data it uses:
