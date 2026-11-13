@@ -101,9 +101,17 @@ On the example this takes a few seconds per clock. Then date with the winner, fo
 | Sampling fraction (rho) | Share of living species included |
 | Root age prior | `uniform MIN MAX`, `soft MIN MAX SD P` (soft bounds) or `normal MEAN SD` |
 | Clock model | Chosen by fitting the five clocks on your phylogram (highly recommended; [Choosing the clock](#choosing-the-clock)), then set with `--clock` |
-| A valid starting tree | With fossils attached, and consistent with the constraints |
+| Starting tree (optional) | **Built automatically** by `scripts/ffbd_convert.py`. Give your own `initial.nwk` only if you want a particular start |
 
 These go in one text file. `examples/example_input.txt` shows every section: the settings, then `tips`, `initial_tree`, `constraints`, `extant_nodes`, `branches` and `terms`. If your inputs are already in RevBayes-style files, `scripts/ffbd_convert.py` builds this file for you.
+
+**You do not need a starting tree.** MCMC needs one valid tree to start from: fossils attached, every constraint, crown or stem rule and calibration satisfied. If the input folder has no `initial.nwk`, the converter builds one:
+
+- each fossil goes on the stem of its clade, at its minimum age;
+- crown-rule fossils go inside the crown;
+- node ages are pushed up wherever a fossil or calibration needs it.
+
+It prints `starting tree built automatically`. `--write-start FILE` saves the tree, and `--auto-start` uses it even when `initial.nwk` exists. The start does not affect the result: from an automatic and from a supplied start, the node ages agree within chain noise (test 6d).
 
 ### Crown and stem rules
 
@@ -270,8 +278,9 @@ The real test clades are Gobiaria (24 living species, 10 fossils) and Protacanth
 - **6a. Convergence.** Two independent chains each were run at 1,185 and 2,424 species, with 20 billion proposals each (about 2 hours on one core).
 - **6b. Crown and stem rules.** The optional rules that keep a fossil inside or outside a crown group were compared with unconstrained runs filtered to the same rules.
 - **6c. Speed.** Speed was measured at both tree sizes.
+- **6d. Automatic starting tree.** Starting trees were built automatically for two small clades and for two 1,184-species sets (1,587 and 1,588 fossils, 430 constraints, crown and stem rules, node calibrations). The same analysis was then run from the automatic start and from a supplied one.
 
-**Answer.** The chains converge (effective sample sizes 500 to 800 for the main parameters; the two chains agree on node ages to 0.9% at the median). The rules behave exactly as intended (all quantities within 1.4 standard errors). Speed is the same at both sizes, about 2.6 million proposals per second.
+**Answer.** The chains converge (effective sample sizes 500 to 800 for the main parameters; the two chains agree on node ages to 0.9% at the median). The rules behave exactly as intended (all quantities within 1.4 standard errors). Every automatic starting tree passes all checks. From the automatic and the supplied start, node ages agree to 0.17 and 0.29% at the median (largest 0.7 and 1.1%), within chain noise. Speed is the same at both sizes, about 2.6 million proposals per second.
 
 ### What the validation shows, and what it does not
 
@@ -315,6 +324,7 @@ Whether that makes the dates more accurate is not tested here. A simulation comp
 | 5b | `make_mb_dna.py`, `compare_mbdna.py` | `mrbayes_dna_A06_A12.txt` |
 | 5c | `clock_ss.py` (DNA, RevBayes); `ffbd --clock C --ss K` (phylogram); `clock_density_check.py` | `clock_checks.txt`; results pending |
 | 6b | `examples/example_crown_stem.txt` | `crown_stem_test_11seeds.txt`, `regression_previous_release.txt` |
+| 6d | `ffbd_convert.py --auto-start` | `auto_start_check.txt` |
 | Figures | `validation_figures.py` | `validation/*.png` |
 
 ### References

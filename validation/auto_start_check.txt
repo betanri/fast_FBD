@@ -1,0 +1,12 @@
+Automatic starting tree (scripts/ffbd_convert.py --auto-start), 13 Nov 2026. Data: phylogram.
+
+Validity (converter checks of constraints, crown/stem rules and calibrations; then ffbd --check-every-step, 20,000 proposals):
+  A06 (Gobiaria): 24 living species, 10 fossils, 10 constraints                         passed
+  A12 (Protacanthopterygii): 22 living species, 14 fossils, 14 constraints              passed
+  1,184 living species, 1,588 fossils, 430 constraints, crown and stem rules, calibrations passed
+  1,184 living species, 1,587 fossils, 430 constraints, crown and stem rules, calibrations passed
+  Apart from the initial_tree section (and internal node numbers), the ffbd input is identical to the one from the supplied start.
+
+Same answer from either start (ffbd, exponential clock, 200M proposals after 5M burn-in, seed 9; node-age medians):
+  A06: median difference 0.17%, largest 0.73%; root 74.83 (supplied) vs 74.82 Ma (automatic)
+  A12: median difference 0.29%, largest 1.12%; root 138.60 (supplied) vs 138.53 Ma (automatic)

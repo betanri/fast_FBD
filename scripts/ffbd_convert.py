@@ -2,10 +2,12 @@
 """Convert a folder of RevBayes-style inputs into one ffbd input file.
 
   ffbd_convert.py --set DIR --out FILE [--mode fast|control] [--root-prior normal MEAN SD | uniform MIN MAX | soft MIN MAX SD P]
+                  [--auto-start] [--write-start FILE]
                   [--bears REVFILE] [--seqrev DIR]
 
-DIR holds: fbd_taxa.tsv (or bears_taxa_specimen.tsv), settings.Rev, backbone.nwk, initial.nwk, constraints_members.tsv or
-constraints.Rev, extant_nodes.Rev, fast_terms.Rev.  --bears gives the Rev script of the bear runs (origin prior, constraint).
+DIR holds: fbd_taxa.tsv (or bears_taxa_specimen.tsv), settings.Rev, backbone.nwk, constraints_members.tsv or constraints.Rev,
+extant_nodes.Rev, fast_terms.Rev; optional: initial.nwk (a starting tree with fossils; built automatically when absent or with
+--auto-start, see auto_start), crown.tsv, stem.tsv, calibrations.Rev.  --bears gives the Rev script of the bear runs (origin prior, constraint).
 Without --root-prior the prior comes from settings.Rev (root_mean, root_sd: Normal).  Only reads files; never edits the data.
 """
 import argparse, re, sys
@@ -15,6 +17,8 @@ ap.add_argument("--set", required=True); ap.add_argument("--out", required=True)
 ap.add_argument("--mode", default="fast"); ap.add_argument("--root-prior", nargs="+", default=None)
 ap.add_argument("--bears", default=None)
 ap.add_argument("--terms-file", default="fast_terms.Rev")
+ap.add_argument("--auto-start", action="store_true", help="build the starting tree even if initial.nwk exists")
+ap.add_argument("--write-start", default=None, help="also save the automatic starting tree (newick) to this file")
 a = ap.parse_args()
 d = a.set
 
@@ -114,72 +118,6 @@ def parse(s):
     return node()
 
 
-init = parse(rd("initial.nwk"))
-if len(init["ch"]) != 2:
-    sys.exit("initial tree root is not bifurcating")
-
-# ids: tips as name2id; internals numbered after tips in pre-order
-nodes = []
-def walk(n, parent, depth):
-    n["parent"] = parent
-    n["depth"] = depth + n["len"]
-    nodes.append(n)
-    for c in n["ch"]:
-        walk(c, n, n["depth"])
-init["len"] = 0.0
-walk(init, None, 0.0)
-N = len(taxa)
-if len([x for x in nodes if not x["ch"]]) != N:
-    sys.exit("initial tree tip count != taxa count")
-# depth of extant tips (take the max)
-exd = [x["depth"] for x in nodes if not x["ch"] and x["name"] in extant]
-D = max(exd)
-for x in nodes:
-    x["age"] = D - x["depth"]
-    if not x["ch"]:
-        if x["name"] in extant:
-            x["age"] = 0.0
-        else:
-            mn, mx = taxa[x["name"]]
-            x["age"] = min(mx, max(mn, x["age"]))
-next_int = N
-for x in nodes:
-    if x["ch"]:
-        x["id"] = next_int
-        next_int += 1
-    else:
-        x["id"] = name2id[x["name"]]
-if next_int != 2 * N - 1:
-    sys.exit("binary tree expected")
-
-# keep ages consistent after the fossil clamping: parent age >= child age; SA if pendant length is exactly 0
-sa_count = 0
-for x in nodes:
-    if x["parent"] is not None and x["age"] > x["parent"]["age"]:
-        # a fossil clamped up against its parent: pull the parent up (rounding only)
-        cur = x
-        while cur["parent"] is not None and cur["age"] > cur["parent"]["age"]:
-            cur["parent"]["age"] = cur["age"]
-            cur = cur["parent"]
-for x in nodes:
-    x["sa"] = 0
-    if x["parent"] is not None and not x["ch"] and x["name"] in fossils:
-        sib = [c for c in x["parent"]["ch"] if c is not x][0]
-        if x["len"] == 0.0 and sib["len"] > 0:
-            x["sa"] = 1
-            sa_count += 1
-
-def _post(root):
-    out, st = [], [root]
-    while st:
-        n = st.pop()
-        out.append(n)
-        st.extend(n["ch"])
-    return out[::-1]
-# tip sets bottom-up once (the old recursive version recomputed every subtree for every node: hours on 25k tips)
-for x in _post([n for n in nodes if n["parent"] is None][0]):
-    x["tips"] = frozenset([x["name"]]) if not x["ch"] else frozenset().union(*[c["tips"] for c in x["ch"]])
-
 # ---- constraints ----
 cons = []
 if a.bears:
@@ -234,6 +172,223 @@ for name, s in cons:
         continue
     uniq.setdefault(fs, name)
 cons = [(nm, s) for s, nm in uniq.items()]
+
+# ---- starting tree: initial.nwk if the folder has one (and --auto-start is not given), else built automatically ----
+def _post(root):
+    out, st = [], [root]
+    while st:
+        n = st.pop()
+        out.append(n)
+        st.extend(n["ch"])
+    return out[::-1]
+
+
+def extant_defs():
+    """extant clade name (as in extant_nodes.Rev, without 'clade_') -> set of tip names"""
+    ent_ = (rd("extant_clades.Rev") + "\n" if os.path.exists(d + "/extant_clades.Rev") else "") + rd("extant_nodes.Rev")
+    dd = {}
+    for m in re.finditer(r"^(clade_\w+)\s*=\s*clade\((.*?)\)\s*$", ent_, re.M):
+        st_ = set()
+        for arg in re.split(r",\s*", m.group(2)):
+            arg = arg.strip()
+            if arg.startswith('"'):
+                st_.add(arg.strip('"'))
+            elif arg in dd:
+                st_ |= dd[arg]
+            else:
+                sys.exit("unknown reference in extant_nodes.Rev: " + arg)
+        dd[m.group(1)] = st_
+    return {k[6:]: v for k, v in dd.items()}
+
+
+def auto_start():
+    """A valid starting tree from the tree of living species (backbone.nwk), the fossil windows and the clade constraints.
+    Start ages: mean path height of the backbone branch lengths (edge counts if it has none), scaled to the initial root age.
+    Each fossil goes on the stem of the smallest constraint that contains it (the node of its living members), at its minimum
+    age; fossils on the same stem are stacked from the smallest constraint up. A crown-rule fossil goes inside the crown, on
+    the stem of the crown node's first child. Nodes are then pushed up wherever needed: above their children and fossils,
+    and to the minimum of any node calibration. All checks below then run on this tree as on a supplied one."""
+    EPS = 0.01
+    bb = parse(rd("backbone.nwk"))
+    bb["parent"] = None
+    order = _post(bb)
+    for x in order:
+        for c in x["ch"]:
+            c["parent"] = x
+        x["tips"] = frozenset([x["name"]]) if not x["ch"] else frozenset().union(*[c["tips"] for c in x["ch"]])
+        if x["ch"] and len(x["ch"]) != 2:
+            sys.exit("auto start: backbone.nwk must be fully bifurcating")
+    if bb["tips"] != frozenset(extant):
+        sys.exit("auto start: backbone.nwk tips differ from the living species of the taxa file")
+    exset_ = set(extant)
+    byset = {x["tips"]: x for x in order}
+    r0 = init_cond
+    if r0 is None:
+        r0 = {"normal": lambda: float(rp[1]), "uniform": lambda: 0.5 * (float(rp[1]) + float(rp[2])),
+              "soft": lambda: 0.5 * (float(rp[1]) + float(rp[2]))}.get(rp[0], lambda: None)()
+    if r0 is None:
+        sys.exit("auto start: give root_age_init in settings.Rev or a root prior")
+    uselen = any(c["len"] > 0 for x in order for c in x["ch"])
+    h, w = {}, {}
+    for x in order:
+        if not x["ch"]:
+            h[id(x)], w[id(x)] = 0.0, 1
+        else:
+            w[id(x)] = sum(w[id(c)] for c in x["ch"])
+            h[id(x)] = sum(w[id(c)] * (h[id(c)] + (c["len"] if uselen else 1.0)) for c in x["ch"]) / w[id(x)]
+    k_ = r0 / h[id(bb)]
+
+    def node_of(E, what):
+        x = byset.get(frozenset(E))
+        if x is None:
+            sys.exit("auto start: the living species of %s are not a clade of backbone.nwk" % what)
+        return x
+
+    def below(x, v):                                   # v is a proper ancestor of x
+        u = x["parent"]
+        while u is not None:
+            if u is v:
+                return True
+            u = u["parent"]
+        return False
+    defs_ = None
+    rules = {}
+    for kind in ("crown", "stem"):
+        if os.path.exists(d + "/%s.tsv" % kind):
+            defs_ = defs_ or extant_defs()
+            for ln in rd("%s.tsv" % kind).splitlines():
+                if ln.strip() and not ln.startswith("#"):
+                    fname, nm = ln.split("\t")[:2]
+                    if nm not in defs_:
+                        sys.exit("%s entry unknown: %s" % (kind, ln))
+                    rules[fname] = (kind, node_of(defs_[nm] & exset_, "%s node %s" % (kind, nm)))
+    cal_lo, cal_hi = {}, {}
+    if os.path.exists(d + "/calibrations.Rev"):
+        defs_ = defs_ or extant_defs()
+        for m in re.finditer(r"dnUniform\(\s*age_(\w+)\s*-\s*([0-9.eE+-]+)\s*,\s*age_\1\s*-\s*([0-9.eE+-]+)\s*\)", rd("calibrations.Rev")):
+            x = node_of(defs_[m.group(1)] & exset_, "calibrated node " + m.group(1))
+            cal_lo[id(x)] = max(cal_lo.get(id(x), 0.0), float(m.group(3)))
+            cal_hi[id(x)] = min(cal_hi.get(id(x), float("inf")), float(m.group(2)))
+    lad = {id(x): [] for x in order}
+    crown_on = {id(x): [] for x in order}
+    for f in fossils:
+        homes = [(len(st_), nm) for nm, st_ in cons if f in st_]
+        if not homes:
+            sys.exit("auto start: fossil %s is in no clade constraint (every fossil needs one below the root)" % f)
+        size, nm = min(homes)
+        E = dict(cons)[nm] & exset_
+        if not E:
+            sys.exit("auto start: constraint %s has no living species; give initial.nwk" % nm)
+        n_ = node_of(E, "constraint " + nm)
+        kind, v = rules.get(f, (None, None))
+        if kind == "crown" and (n_ is v or below(v, n_)):
+            if not v["ch"]:
+                sys.exit("auto start: crown rule of %s is on a single species" % f)
+            crown_on[id(v["ch"][0])].append((taxa[f][0], f))
+            continue
+        if kind == "stem" and below(n_, v):
+            sys.exit("auto start: stem rule of %s conflicts with its constraint %s" % (f, nm))
+        lad[id(n_)].append((size, taxa[f][0], f))
+    if lad[id(bb)]:
+        sys.exit("auto start: fossils would sit above the root: %s" % [f for _, _, f in lad[id(bb)]][:3])
+    top, ladder, age = {}, {}, {}
+    for x in order:
+        a = 0.0 if not x["ch"] else max([h[id(x)] * k_, cal_lo.get(id(x), 0.0)] + [top[id(c)] + EPS for c in x["ch"]])
+        if a > cal_hi.get(id(x), float("inf")):
+            sys.exit("auto start: a calibrated node had to be older than its maximum (%g > %g)" % (a, cal_hi[id(x)]))
+        age[id(x)] = a
+        L = []
+        for _, lo, f in sorted(lad[id(x)]):
+            a = max(a, lo) + EPS
+            L.append((a, f))
+        for lo, f in sorted(crown_on[id(x)]):
+            a = max(a, lo) + EPS
+            L.append((a, f))
+        top[id(x)], ladder[id(x)] = a, L
+    if rp[0] == "uniform" and age[id(bb)] > float(rp[2]):
+        sys.exit("auto start: the root had to be %.2f, above the root prior maximum %s" % (age[id(bb)], rp[2]))
+    sys.setrecursionlimit(max(10000, 4 * len(taxa)))
+
+    def nw(x):
+        if not x["ch"]:
+            s_, a = x["name"], 0.0
+        else:
+            parts = []
+            for c in x["ch"]:
+                cs, ca = nw(c)
+                parts.append("%s:%r" % (cs, age[id(x)] - ca))
+            s_, a = "(" + ",".join(parts) + ")", age[id(x)]
+        for a2, f in ladder[id(x)]:
+            s_ = "(%s:%r,%s:%r)" % (s_, a2 - a, f, a2 - taxa[f][0])
+            a = a2
+        return s_, a
+    return nw(bb)[0] + ";", age[id(bb)]
+
+
+auto = a.auto_start or not os.path.exists(d + "/initial.nwk")
+if auto:
+    start_nwk, init_cond = auto_start()
+    print("starting tree built automatically (root %.2f Ma)" % init_cond)
+    if a.write_start:
+        open(a.write_start, "w").write(start_nwk + "\n")
+init = parse(start_nwk if auto else rd("initial.nwk"))
+if len(init["ch"]) != 2:
+    sys.exit("initial tree root is not bifurcating")
+
+# ids: tips as name2id; internals numbered after tips in pre-order
+nodes = []
+def walk(n, parent, depth):
+    n["parent"] = parent
+    n["depth"] = depth + n["len"]
+    nodes.append(n)
+    for c in n["ch"]:
+        walk(c, n, n["depth"])
+init["len"] = 0.0
+walk(init, None, 0.0)
+N = len(taxa)
+if len([x for x in nodes if not x["ch"]]) != N:
+    sys.exit("initial tree tip count != taxa count")
+# depth of extant tips (take the max)
+exd = [x["depth"] for x in nodes if not x["ch"] and x["name"] in extant]
+D = max(exd)
+for x in nodes:
+    x["age"] = D - x["depth"]
+    if not x["ch"]:
+        if x["name"] in extant:
+            x["age"] = 0.0
+        else:
+            mn, mx = taxa[x["name"]]
+            x["age"] = min(mx, max(mn, x["age"]))
+next_int = N
+for x in nodes:
+    if x["ch"]:
+        x["id"] = next_int
+        next_int += 1
+    else:
+        x["id"] = name2id[x["name"]]
+if next_int != 2 * N - 1:
+    sys.exit("binary tree expected")
+
+# keep ages consistent after the fossil clamping: parent age >= child age; SA if pendant length is exactly 0
+sa_count = 0
+for x in nodes:
+    if x["parent"] is not None and x["age"] > x["parent"]["age"]:
+        # a fossil clamped up against its parent: pull the parent up (rounding only)
+        cur = x
+        while cur["parent"] is not None and cur["age"] > cur["parent"]["age"]:
+            cur["parent"]["age"] = cur["age"]
+            cur = cur["parent"]
+for x in nodes:
+    x["sa"] = 0
+    if x["parent"] is not None and not x["ch"] and x["name"] in fossils:
+        sib = [c for c in x["parent"]["ch"] if c is not x][0]
+        if x["len"] == 0.0 and sib["len"] > 0:
+            x["sa"] = 1
+            sa_count += 1
+
+# tip sets bottom-up once (the old recursive version recomputed every subtree for every node: hours on 25k tips)
+for x in _post([n for n in nodes if n["parent"] is None][0]):
+    x["tips"] = frozenset([x["name"]]) if not x["ch"] else frozenset().union(*[c["tips"] for c in x["ch"]])
 
 # check the initial tree satisfies the constraints
 tsets = {x["tips"] for x in nodes}
