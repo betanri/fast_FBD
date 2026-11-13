@@ -8,10 +8,11 @@ A fast Bayesian program for dating phylogenies with fossils, using the **fossili
 
 FBD dating treats fossils as real tips on the tree, instead of turning them into minimum ages on nodes. That uses all the fossils, not just the oldest ones, but standard programs become extremely slow on large trees.
 
-`ffbd` makes this practical with two ideas:
+`ffbd` makes this practical with two ideas, and adds a third step that full-DNA FBD rarely manages on large trees:
 
 1. **Fast FBD.** The DNA alignment is summarized once, as a tree of branch lengths with a standard error for each branch. The program then asks how well each proposed set of dates and rates explains those branch lengths, instead of recalculating the full DNA likelihood.
 2. **Local updates.** When one age changes, only the affected terms are recalculated. Cost per step does not grow with tree size.
+3. **Clock fitting.** Five clock models are built in. Their marginal likelihoods can be estimated on the same phylogram (`--ss`), so the clock is chosen by fit on the tree being dated, not by habit. With full-DNA FBD, this kind of fitting is practical only for small clades.
 
 On one CPU core it runs about **2.6 million MCMC proposals per second**, with no slowdown between 1,185 and 2,424 tips.
 
@@ -22,6 +23,7 @@ On one CPU core it runs about **2.6 million MCMC proposals per second**, with no
 | The relationships among living species | Ages of all nodes |
 | Sampling fraction of living species (rho) | Speciation, extinction and fossil sampling rates |
 | Fossil clade constraints and age windows | Where each fossil attaches, within its constraint |
+| Clock model (chosen by fit beforehand; see [Choosing the clock](#choosing-the-clock)) | Clock parameters (mean rate, and the rate variation of the chosen clock) |
 | | Each fossil's age, within its window |
 | | Whether a fossil is a sampled ancestor |
 | | Rates of molecular evolution, per branch |
@@ -58,6 +60,33 @@ This takes under a second and writes:
 
 Run at least two chains with different `--seed` values and check that they agree.
 
+### Choosing the clock
+
+`ffbd` has five clock models (`--clock`):
+
+| Clock | Each branch rate |
+|---|---|
+| `exp` (default) | Exponential around the mean rate |
+| `ln` | Lognormal around the mean rate (uncorrelated) |
+| `gam` | Gamma around the mean rate |
+| `igr` | Gamma whose spread shrinks on longer branches (independent gamma rates, as in MrBayes) |
+| `acln` | Lognormal around the rate of its parent branch (autocorrelated) |
+
+To choose one, estimate the marginal likelihood of each by stepping-stone sampling (`--ss K`, with K+1 powers between posterior and prior), then keep the highest:
+
+```bash
+for c in exp ln gam igr acln; do
+  ./ffbd run examples/example_input.txt --prefix runs/clock_$c --clock $c --seed 1 --burnin 100000 \
+      --ss 32 --ss-burn 100000 --ss-gens 1000000 --ss-every 200
+done
+grep -hv '^clock' runs/clock_*.ml.tsv | sort -t$'\t' -k7,7gr | cut -f1,7,8   # clock, stepping-stone, path sampling; best first
+```
+
+On the example this takes a few seconds per clock. Then date with the winner, for example `--clock gam` added to the run above.
+
+- **Reading the result.** A difference of more than about 5 log units is strong evidence for the better clock. Smaller differences mean the data hardly prefer one clock, so the default is fine.
+- **Settings for real trees.** Use many more proposals per power: test 5c uses 64 powers, each with 250 million proposals after 50 million of burn-in. Repeat with a second seed to check that the estimate is stable.
+
 ## What you need
 
 | Input | Notes |
@@ -69,6 +98,7 @@ Run at least two chains with different `--seed` values and check that they agree
 | Crown or stem rules (optional) | Fossils that must sit inside a crown, or on its stem only (see below) |
 | Sampling fraction (rho) | Share of living species included |
 | Root age prior | `uniform MIN MAX`, `soft MIN MAX SD P` (soft bounds) or `normal MEAN SD` |
+| Clock model | Set at run time with `--clock`; choose it by fit ([Choosing the clock](#choosing-the-clock)) |
 | A valid starting tree | With fossils attached, and consistent with the constraints |
 
 These go in one text file. `examples/example_input.txt` shows every section: the settings, then `tips`, `initial_tree`, `constraints`, `extant_nodes`, `branches` and `terms`. If your inputs are already in RevBayes-style files, `scripts/ffbd_convert.py` builds this file for you.
