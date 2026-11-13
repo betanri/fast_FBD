@@ -28,9 +28,11 @@ On one CPU core it runs about **2.6 million MCMC proposals per second**, with no
 | | Whether a fossil is a sampled ancestor |
 | | Rates of molecular evolution, per branch |
 
-**Use it when** the tree of living species is settled, you have many fossils, and full-DNA FBD is too slow.
+**Use it when** you have many fossils and a tree of living species estimated from genomic data, and full-DNA FBD is too slow.
 
-**Do not use it when** the topology of living species is in question, or for very short or poorly supported branches where a Normal approximation of branch length is doubtful.
+**Tree uncertainty.** `ffbd` does not estimate the topology of living species: it dates a given tree. To carry topological uncertainty into the dates, date several trees and report the spread of ages across them. Good choices are trees estimated from different subsets of the genomic data, for example different sets of loci (as in Rincon-Sandoval et al. 2020, 2024; Santaquiteria et al. 2021). In one way this is a stronger test than dating trees from one Bayesian posterior: posterior trees all come from the same alignment and model, while trees from different subsets rest on different data. Each tree takes hours with `ffbd`, so dating tens of trees is practical.
+
+**Be careful with** very short or poorly supported branches, where a Normal approximation of branch length is doubtful.
 
 ## Install
 
@@ -307,7 +309,7 @@ The real test clades are Gobiaria (24 living species, 10 fossils) and Protacanth
 - **The dates are true.** The true ages of real clades are unknown. More genes and better clocks reduce error, but model error remains.
 - **The clock is right.** The clock and the genes behind the branch lengths can move dates more than the shortcut does (question 5), so they deserve the same care as fossil choice.
 - **Very young nodes are accurate.** Nodes under about 5 Ma tend to come out about 1 Myr too old. This comes from the model and priors, and full-DNA FBD shares it.
-- **The topology is right.** The topology of living species is assumed, not tested.
+- **The topology is right.** Each run dates one tree of living species. Topological uncertainty is covered by dating several trees (see Tree uncertainty, above).
 
 ### Why `ffbd` may do better than full-DNA FBD on real data
 
@@ -355,14 +357,17 @@ Full-DNA FBD is slow, and that forces two compromises in practice. `ffbd` remove
 - Heath TA, Huelsenbeck JP, Stadler T (2014). The fossilized birth-death process for coherent calibration of divergence-time estimates. *PNAS* 111: E2957-E2966.
 - Höhna S, Landis MJ, Heath TA, et al. (2016). RevBayes: Bayesian phylogenetic inference using graphical models and an interactive model-specification language. *Systematic Biology* 65: 726-736.
 - Mendes FK, Bouckaert R, Carvalho LM, Drummond AJ (2025). How to validate a Bayesian evolutionary model. *Systematic Biology*, doi:10.1093/sysbio/syae064.
+- Rincon-Sandoval M, Duarte-Ribeiro E, Davis AM, et al. (2020). Evolutionary determinism and convergence associated with water-column transitions in marine fishes. *PNAS* 117: 33396-33403.
+- Rincon-Sandoval M, et al. (2024). Ecological diversification of sea catfishes is accompanied by genome-wide signatures of positive selection. *Nature Communications* 15: 10040.
 - Ronquist F, Teslenko M, van der Mark P, et al. (2012). MrBayes 3.2: efficient Bayesian phylogenetic inference and model choice across a large model space. *Systematic Biology* 61: 539-542.
+- Santaquiteria A, Siqueira AC, Duarte-Ribeiro E, et al. (2021). Phylogenomics and historical biogeography of seahorses, dragonets, goatfishes, and allies (Teleostei: Syngnatharia): assessing factors driving uncertainty in biogeographic inferences. *Systematic Biology* 70: 1145-1162.
 - Talts S, Betancourt M, Simpson D, Vehtari A, Gelman A (2018). Validating Bayesian inference algorithms with simulation-based calibration. arXiv:1804.06788.
 - Xie W, Lewis PO, Fan Y, Kuo L, Chen MH (2011). Improving marginal likelihood estimation for Bayesian phylogenetic model selection. *Systematic Biology* 60: 150-160.
 - Zhang C, Stadler T, Klopfstein S, Heath TA, Ronquist F (2016). Total-evidence dating under the fossilized birth-death process. *Systematic Biology* 65: 228-249.
 
 ## Known limits
 
-- The topology of living species cannot change.
+- The topology of living species is fixed within a run; date several trees to cover topological uncertainty.
 - Fossils must fall inside a clade constraint below the root in root-conditioned runs.
 - Rates are constant through time (no shifts or mass extinctions).
 - The result depends on the quality of the branch lengths and their standard errors.
