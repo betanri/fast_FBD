@@ -202,7 +202,7 @@ The real test clades are Gobiaria (24 living species, 10 fossils) and Protacanth
     - *DNA.* RevBayes on the 23 genes of the two test clades, with six clocks: strict, exponential (the `ffbd` default), lognormal, gamma, IGR and autocorrelated lognormal. Node ages are either fixed at the DNA estimates or estimated with fossil minimum ages.
     - *Phylogram.* `ffbd` itself (`--ss`) on the 1,184-species phylogram used for dating, with all five `ffbd` clocks.
 
-    The best-fitting clock will be used for the final dates. Three of the clocks (gamma, IGR, autocorrelated lognormal) and the stepping-stone code are new, so they first passed the same kinds of checks as questions 1 and 2:
+    The best-fitting clock will be used for the final dates. With full-DNA FBD, this kind of clock fitting is practical only on small clades (see "Why `ffbd` may do better" below); `ffbd` can do it on the full tree being dated. Three of the clocks (gamma, IGR, autocorrelated lognormal) and the stepping-stone code are new, so they first passed the same kinds of checks as questions 1 and 2:
     - their prior densities match an independent implementation (scipy) to rounding error;
     - with no data they recover their priors exactly;
     - on a small example, the stepping-stone estimate matches a brute-force average of the likelihood over 500,000 prior draws within Monte Carlo error;
@@ -262,6 +262,8 @@ Full-DNA FBD is limited in practice to a few dozen genes, because it is slow. He
 
 - **The shortcut does not change the answer:** given the same genes, `ffbd` matches full-DNA FBD.
 - **The data do change it:** all-gene branch lengths give ages a few million years younger. They are also 5 to 6 times more precise (standard error relative to branch length).
+
+**Choosing the clock on the tree that is dated.** RevBayes and MrBayes also offer several clocks and stepping-stone sampling, but on DNA that pipeline is practical only for small clades. Here, one RevBayes stepping-stone run for one clock on 22 to 24 species and 23 genes took 1.5 to 10 hours on 8 cores. Repeating that for every clock on a tree of 1,184 species and 1,588 fossils is out of reach. In practice, full-DNA FBD studies therefore pick one clock and rarely test it. `ffbd` runs the whole pipeline on the phylogram of the tree actually being dated, on one core per clock: fit five clocks by marginal likelihood (test 5c), keep the best, and date with it.
 
 Whether that makes the dates more accurate is not tested here. A simulation comparing few-gene with many-gene branch lengths against known true ages would answer it.
 
