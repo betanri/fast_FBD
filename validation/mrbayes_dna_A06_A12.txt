@@ -1,0 +1,20 @@
+A06: 23 extant nodes; samples {'RevBayes DNA (6 chains)': 67506, 'RevBayes DNA chains 1-3': 33753, 'RevBayes DNA chains 4-6': 33753, 'MrBayes DNA': 18002, 'MrBayes DNA chain 1': 9001, 'MrBayes DNA chain 2': 9001, 'MrBayes prior only': 18002, 'ffbd 23-gene phylogram': 18002}
+comparison                                                       r  median %   max %  mean shift Myr  inside 95% of ref
+noise: MrBayes DNA chain 1 vs chain 2                       0.9999      0.51    1.67           -0.10           23/23
+noise: RevBayes DNA chains 1-3 vs 4-6                       0.9976      1.44   10.64           -0.87           23/23
+MrBayes DNA vs RevBayes DNA                                 0.9794      3.08   21.28           -0.17           23/23
+ffbd 23-gene phylogram vs MrBayes DNA                       0.9841      2.80   24.61           +0.64           23/23
+ffbd 23-gene phylogram vs RevBayes DNA                      0.9993      1.02    4.60           +0.47           23/23
+MrBayes prior only vs MrBayes DNA                           0.9466      8.39   42.02           +3.19           23/23
+root (Ma): {'RevBayes DNA (6 chains)': 75.2, 'MrBayes DNA': 74.0, 'ffbd 23-gene phylogram': 75.2, 'MrBayes prior only': 74.6}
+
+A12: 21 extant nodes; samples {'RevBayes DNA (6 chains)': 67506, 'RevBayes DNA chains 1-3': 33753, 'RevBayes DNA chains 4-6': 33753, 'MrBayes DNA': 18002, 'MrBayes DNA chain 1': 9001, 'MrBayes DNA chain 2': 9001, 'MrBayes prior only': 18002, 'ffbd 23-gene phylogram': 18002}
+comparison                                                       r  median %   max %  mean shift Myr  inside 95% of ref
+noise: MrBayes DNA chain 1 vs chain 2                       0.9997      4.14   16.95           +1.30           21/21
+noise: RevBayes DNA chains 1-3 vs 4-6                       0.9997      3.32   13.66           +1.43           21/21
+MrBayes DNA vs RevBayes DNA                                 0.9809     20.06   42.07          -10.25           21/21
+ffbd 23-gene phylogram vs MrBayes DNA                       0.9792     27.92   77.19          +10.90           14/21
+ffbd 23-gene phylogram vs RevBayes DNA                      0.9999      1.50    3.42           +0.65           21/21
+MrBayes prior only vs MrBayes DNA                           0.9291     53.67  215.62          +20.39            6/21
+root (Ma): {'RevBayes DNA (6 chains)': 138.9, 'MrBayes DNA': 138.8, 'ffbd 23-gene phylogram': 139.0, 'MrBayes prior only': 138.5}
+
