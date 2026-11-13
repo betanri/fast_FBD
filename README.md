@@ -44,33 +44,37 @@ make
 
 ## Quick start
 
-A small simulated data set is included (4 living species, 3 fossils), so every step runs in seconds and shows the file formats.
+The quick start uses real data: the 8 living and 14 fossil bears of the RevBayes FBD tutorial (fossils after Heath et al. 2014; branch lengths and standard errors from the tutorial's cytochrome b alignment), in `examples/bears_input.txt`. Every step takes seconds. A tiny simulated set (4 living species, 3 fossils) used by the tests is in `examples/example_input.txt`.
 
 **Step 1. Choose the clock (highly recommended).** Fit the five clock models and list them from best to worst fit ([Choosing the clock](#choosing-the-clock) explains how to read the result):
 
 ```bash
 mkdir -p runs
 for c in exp ln gam igr acln; do
-  ./ffbd run examples/example_input.txt --prefix runs/clock_$c --clock $c --seed 1 --burnin 100000 \
+  ./ffbd run examples/bears_input.txt --prefix runs/clock_$c --clock $c --seed 1 --burnin 100000 \
       --ss 32 --ss-burn 100000 --ss-gens 1000000 --ss-every 200
 done
 grep -hv '^clock' runs/clock_*.ml.tsv | sort -t$'\t' -k7,7gr | cut -f1,7,8   # clock, stepping-stone, path sampling; best first
 ```
 
-**Step 2. Date with the best clock.** On the example, `gam` comes out on top:
+On the bears, `igr`, `acln` and `ln` tie (within 0.5 log units over three seeds) and beat `gam` by about 2.5 and `exp` by about 3.5 log units. Those gaps are below 5, so the cytochrome b data only weakly prefer the top clocks: date with the top one and check the runner-up.
+
+**Step 2. Date with the best clock.** Run two chains:
 
 ```bash
-./ffbd run examples/example_input.txt --prefix runs/example --clock gam --seed 1 --gens 2000000 --print 2000 --tree-print 20000 --burnin 100000
+for s in 1 2; do
+  ./ffbd run examples/bears_input.txt --prefix runs/bears_r$s --clock igr --seed $s --gens 100000000 --print 50000 --tree-print 500000 --burnin 1000000
+done
 ```
 
-This takes under a second and writes:
+Each chain takes about 15 seconds and writes:
 
 | File | Contents |
 |---|---|
-| `runs/example.log` | One row per sample: posterior, rates, and the age of each node (`age_n1`, ...), readable in Tracer |
-| `runs/example.trees` | Sampled trees with fossils as tips |
+| `runs/bears_r1.log` | One row per sample: posterior, rates, and the age of each node (`age_ursinae`, ...), readable in Tracer |
+| `runs/bears_r1.trees` | Sampled trees with fossils as tips |
 
-Run at least two chains with different `--seed` values and check that they agree.
+Always run at least two chains with different `--seed` values and check that they agree. Here the two bear chains agree on node ages to about 1% (the crown of living bears at about 21 Ma).
 
 ### Choosing the clock
 
