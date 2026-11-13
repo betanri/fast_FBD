@@ -48,8 +48,10 @@ A tiny simulated data set is included (4 living species, 3 fossils):
 
 ```bash
 mkdir -p runs
-./ffbd run examples/example_input.txt --prefix runs/example --seed 1 --gens 2000000 --print 2000 --tree-print 20000 --burnin 100000
+./ffbd run examples/example_input.txt --prefix runs/example --clock exp --seed 1 --gens 2000000 --print 2000 --tree-print 20000 --burnin 100000
 ```
+
+The clock here is only for the demonstration. For real data, choose it by fit first ([Choosing the clock](#choosing-the-clock)).
 
 This takes under a second and writes:
 
@@ -62,11 +64,11 @@ Run at least two chains with different `--seed` values and check that they agree
 
 ### Choosing the clock
 
-`ffbd` has five clock models (`--clock`):
+**Highly recommended before dating: choose the clock by fit.** `ffbd` has five clock models (`--clock`), and on the same DNA a different clock moved some dates by about 10 million years (test 5b), more than the phylogram shortcut ever does. Fit all five on your own phylogram, then date with the best one.
 
 | Clock | Each branch rate |
 |---|---|
-| `exp` (default) | Exponential around the mean rate |
+| `exp` | Exponential around the mean rate |
 | `ln` | Lognormal around the mean rate (uncorrelated) |
 | `gam` | Gamma around the mean rate |
 | `igr` | Gamma whose spread shrinks on longer branches (independent gamma rates, as in MrBayes) |
@@ -84,7 +86,7 @@ grep -hv '^clock' runs/clock_*.ml.tsv | sort -t$'\t' -k7,7gr | cut -f1,7,8   # c
 
 On the example this takes a few seconds per clock. Then date with the winner, for example `--clock gam` added to the run above.
 
-- **Reading the result.** A difference of more than about 5 log units is strong evidence for the better clock. Smaller differences mean the data hardly prefer one clock, so the default is fine.
+- **Reading the result.** A difference of more than about 5 log units is strong evidence for the better clock. Smaller differences mean the data hardly prefer one clock; report the dates under the top two clocks.
 - **Settings for real trees.** Use many more proposals per power: test 5c uses 64 powers, each with 250 million proposals after 50 million of burn-in. Repeat with a second seed to check that the estimate is stable.
 
 ## What you need
@@ -98,7 +100,7 @@ On the example this takes a few seconds per clock. Then date with the winner, fo
 | Crown or stem rules (optional) | Fossils that must sit inside a crown, or on its stem only (see below) |
 | Sampling fraction (rho) | Share of living species included |
 | Root age prior | `uniform MIN MAX`, `soft MIN MAX SD P` (soft bounds) or `normal MEAN SD` |
-| Clock model | Set at run time with `--clock`; choose it by fit ([Choosing the clock](#choosing-the-clock)) |
+| Clock model | Chosen by fitting the five clocks on your phylogram (highly recommended; [Choosing the clock](#choosing-the-clock)), then set with `--clock` |
 | A valid starting tree | With fossils attached, and consistent with the constraints |
 
 These go in one text file. `examples/example_input.txt` shows every section: the settings, then `tips`, `initial_tree`, `constraints`, `extant_nodes`, `branches` and `terms`. If your inputs are already in RevBayes-style files, `scripts/ffbd_convert.py` builds this file for you.
@@ -124,7 +126,7 @@ A clade constraint says a fossil belongs to a group, and that includes the group
 | `--checkpoint N`, `--resume` | Save progress and continue a run exactly where it stopped |
 | `--mode control` | Run without molecular data, to see what the fossils and priors alone imply |
 | `--log-rates` | Also log branch rates |
-| `--clock exp\|ln\|gam\|igr\|acln` | Clock model (see below); default exponential |
+| `--clock exp\|ln\|gam\|igr\|acln` | Clock model. Always set it, after fitting the clocks ([Choosing the clock](#choosing-the-clock)). If omitted, `exp` is used and a warning is printed |
 | `--ss K --ss-gens G` | Instead of a normal run, estimate the marginal likelihood of the phylogram by stepping-stone sampling with K+1 powers, to compare clock models |
 | `--check` | Check internal consistency while running (slow) |
 
@@ -133,7 +135,7 @@ A clade constraint says a fossil belongs to a group, and that includes the group
 - Constant-rate fossilized birth-death process with sampled ancestors, conditioned on the root age. The density matches RevBayes 1.3.2 `dnBDSTP` inside `dnConstrainedTopology`.
 - Fossil ages are uniform within their windows.
 - Clock: one rate per branch of the living-species tree, with mean rate m ~ Exp(10). Five clock priors (`--clock`):
-    - `exp` (default): each rate ~ Exponential(mean m).
+    - `exp`: each rate ~ Exponential(mean m).
     - `ln`: uncorrelated lognormal, mean m.
     - `gam`: each rate ~ Gamma(shape k, mean m).
     - `igr`: independent gamma rates as in MrBayes; the rate variance shrinks on longer branches.
@@ -229,14 +231,14 @@ The real test clades are Gobiaria (24 living species, 10 fossils) and Protacanth
 - **5a. Which genes.** *DNA vs several phylograms.* Everything stayed the same except the phylogram given to `ffbd`: one from the same 23 genes, one from all genes (about 1,100 genes, 580,000 sites), and one from a genome-scale phylogram of a larger tree, pruned to the clade.
 - **5b. Which clock, by a second DNA program.** *DNA vs phylogram.* MrBayes ran full-DNA FBD on the same 23 genes. MrBayes cannot run the clock that `ffbd` and RevBayes use (one exponential rate per branch), so it used independent gamma rates (IGR).
 - **5c. Which clock fits best.** Clocks are compared by marginal likelihood, which measures how well each model predicts the data while penalizing extra flexibility (stepping-stone sampling; Xie et al. 2011). There are two complementary fits:
-    - *DNA.* RevBayes on the 23 genes of the two test clades, with six clocks: strict, exponential (the `ffbd` default), lognormal, gamma, IGR and autocorrelated lognormal. Node ages are either fixed at the DNA estimates or estimated with fossil minimum ages.
+    - *DNA.* RevBayes on the 23 genes of the two test clades, with six clocks: strict, exponential (the clock used in tests 1 to 5b), lognormal, gamma, IGR and autocorrelated lognormal. Node ages are either fixed at the DNA estimates or estimated with fossil minimum ages.
     - *Phylogram.* `ffbd` itself (`--ss`) on the 1,184-species phylogram used for dating, with all five `ffbd` clocks.
 
     The best-fitting clock will be used for the final dates. With full-DNA FBD, this kind of clock fitting is practical only on small clades (see "Why `ffbd` may do better" below); `ffbd` can do it on the full tree being dated. Three of the clocks (gamma, IGR, autocorrelated lognormal) and the stepping-stone code are new, so they first passed the same kinds of checks as questions 1 and 2:
     - their prior densities match an independent implementation (scipy) to rounding error;
     - with no data they recover their priors exactly;
     - on a small example, the stepping-stone estimate matches a brute-force average of the likelihood over 500,000 prior draws within Monte Carlo error;
-    - with the default clock, the program gives byte-identical output to the previous version.
+    - with the exponential clock, the program gives byte-identical output to the previous version.
 - **5d. Sampling fraction.** *Phylogram.* `ffbd` fixes rho, the fraction of living species in the tree. A 1,184-species phylogram (pruned from a genome-scale phylogram of a larger tree) with 1,588 fossils was dated at rho = 3.25, 10, 15, 25 and 50%.
 
 **Answer.**
@@ -248,7 +250,7 @@ The real test clades are Gobiaria (24 living species, 10 fossils) and Protacanth
     | Clock | DNA, Gobiaria | DNA, Protacanthopterygii | Phylogram, 1,184 species |
     |---|---|---|---|
     | Strict | pending | pending | not in `ffbd` |
-    | Exponential (default) | pending | pending | pending |
+    | Exponential | pending | pending | pending |
     | Lognormal | pending | pending | pending |
     | Gamma | pending | pending | pending |
     | IGR | pending | pending | pending |
