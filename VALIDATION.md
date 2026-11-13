@@ -34,6 +34,7 @@ Status as of 13 November 2026. This file holds the numbers behind the [README Va
 | | 5b | ffbd against MrBayes full-DNA FBD (IGR clock) | DNA vs phylogram | Gobiaria agrees; Protacanthopterygii is clock-sensitive |
 | | 5c | Clock models by marginal likelihood, on DNA (RevBayes) and on the phylogram (`ffbd --ss`) | DNA; phylogram | New code checked; fits running |
 | | 5d | Sampling fraction (rho) | Phylogram | Up to 8% younger at rho 50% |
+| | 5e | Few against many genes, known true ages | Phylograms from simulated DNA | 1,000 genes more accurate than 23 (63% of nodes closer) |
 | 6. Large trees | 6a | Convergence at 1,185 and 2,424 tips | Phylogram | Passed |
 | | 6b | Crown and stem rules | Phylogram | Passed |
 | | 6d | Automatic starting tree | Phylogram | Passed: valid on 1,184 species; same answer as a supplied start |
@@ -350,6 +351,49 @@ Path sampling comes out about 0.1 lower, a known discretization bias with few po
 | 50% | -0.7% | 1 to 8% younger, most on younger crowns |
 
 Overstating rho makes dates somewhat younger, but even a 15-fold error moves them less than the choice of genes (5a) or clock (5b).
+
+### 5e. Few against many genes, with known true ages
+
+*Data: phylograms estimated from simulated DNA.* Test 5a showed that more genes change the ages on real clades, but it could not tell which answer is right. This test uses the 100 true trees of test 4b (`scripts/sim_genes.py`).
+
+**Genes.** A multi-gene data set is simulated on each tree, gene by gene:
+
+- **Nuclear genes.** Each has its own rate multiplier (Gamma, shape 2, mean 1), its own GTR rates and base frequencies, and its own rate-variation shape (alpha uniform 0.3 to 1.5). Lengths are 500 to 1,000 sites for 21 exon-like genes, and 300 to 700 sites for the rest.
+- **Mitochondrial-like genes.** Each evolves at 10 times the rate, with AT-rich composition and alpha 0.3, so they saturate on deep branches.
+
+**Two gene sets.** The small set is part of the large one, as in the real data:
+
+- **few**: 21 nuclear plus 2 mitochondrial-like genes (about 18,000 sites).
+- **many**: 1,000 genes (about 500,000 sites).
+
+**Analysis.** Each set is analyzed like the real clades: concatenated under one GTR+G4 model, with ML branch lengths on the true topology. The arms are:
+
+- **few**: 100 bootstrap SEs.
+- **few, SE rule** and **many, SE rule**: the SE rule.
+- **exact**: the true branch lengths, from test 4b. This is the reference for a perfect phylogram.
+
+Each arm ran `ffbd` for 200 million proposals per tree, with the same fossils, constraints and priors. Scoring: `scripts/sim_genes_summary.py` (`validation/sim_genes_100reps.txt`), over 6,911 nodes.
+
+| Arm | Coverage of the 95% interval | Median relative error | Median error | Mean error | Median interval width |
+|---|---|---|---|---|---|
+| exact (true branch lengths) | 0.931 | 12.0% | 3.13 Myr | 4.41 Myr | 21.2 Myr |
+| few (23 genes, bootstrap SE) | 0.895 | 19.6% | 3.55 Myr | 4.90 Myr | 22.1 Myr |
+| few (23 genes, SE rule) | 0.894 | 19.6% | 3.55 Myr | 4.90 Myr | 22.0 Myr |
+| many (1,000 genes, SE rule) | 0.907 | 17.1% | 3.39 Myr | 4.77 Myr | 21.9 Myr |
+
+By true node age (coverage / median relative error):
+
+| Arm | 0-5 Ma | 5-10 | 10-20 | 20-40 | 40-60 | 60-100 |
+|---|---|---|---|---|---|---|
+| exact | 0.92 / +56% | 0.93 / +21% | 0.93 / +14% | 0.94 / +8% | 0.93 / +4% | 0.97 / +1% |
+| few | 0.83 / +92% | 0.91 / +35% | 0.91 / +22% | 0.91 / +11% | 0.91 / +6% | 0.96 / +2% |
+| many | 0.87 / +73% | 0.91 / +30% | 0.91 / +20% | 0.92 / +10% | 0.91 / +6% | 0.95 / +2% |
+
+- **More genes are more accurate.** The 1,000-gene ages are closer to the truth than the 23-gene ages on 4,333 of 6,911 nodes (62.7%). They close about 40% of the gap between 23 genes and perfect branch lengths.
+- **The gain is largest on young nodes.** Under 5 Ma, coverage rises from 0.83 to 0.87 and the bias falls from +92% to +73%. Above 40 Ma the gene sets hardly differ.
+- **Young nodes still come out too old.** Even with perfect branch lengths they are +56% too old. That bias comes from the model and priors (test 4b).
+- **The SE rule and bootstrap SEs give the same result,** as on the real clades (test 5a).
+- **Caveat.** The simulated genes evolve under models the analysis can fit, so model misspecification on real genes could make the gain smaller or larger.
 
 ## 6. Large trees
 

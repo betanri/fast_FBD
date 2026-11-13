@@ -44,14 +44,24 @@ make
 
 ## Quick start
 
-A tiny simulated data set is included (4 living species, 3 fossils):
+A small simulated data set is included (4 living species, 3 fossils), so every step runs in seconds and shows the file formats.
+
+**Step 1. Choose the clock (highly recommended).** Fit the five clock models and list them from best to worst fit ([Choosing the clock](#choosing-the-clock) explains how to read the result):
 
 ```bash
 mkdir -p runs
-./ffbd run examples/example_input.txt --prefix runs/example --clock exp --seed 1 --gens 2000000 --print 2000 --tree-print 20000 --burnin 100000
+for c in exp ln gam igr acln; do
+  ./ffbd run examples/example_input.txt --prefix runs/clock_$c --clock $c --seed 1 --burnin 100000 \
+      --ss 32 --ss-burn 100000 --ss-gens 1000000 --ss-every 200
+done
+grep -hv '^clock' runs/clock_*.ml.tsv | sort -t$'\t' -k7,7gr | cut -f1,7,8   # clock, stepping-stone, path sampling; best first
 ```
 
-The clock here is only for the demonstration. For real data, choose it by fit first ([Choosing the clock](#choosing-the-clock)).
+**Step 2. Date with the best clock.** On the example, `gam` comes out on top:
+
+```bash
+./ffbd run examples/example_input.txt --prefix runs/example --clock gam --seed 1 --gens 2000000 --print 2000 --tree-print 20000 --burnin 100000
+```
 
 This takes under a second and writes:
 
@@ -74,17 +84,7 @@ Run at least two chains with different `--seed` values and check that they agree
 | `igr` | Gamma whose spread shrinks on longer branches (independent gamma rates, as in MrBayes) |
 | `acln` | Lognormal around the rate of its parent branch (autocorrelated) |
 
-To choose one, estimate the marginal likelihood of each by stepping-stone sampling (`--ss K`, with K+1 powers between posterior and prior), then keep the highest:
-
-```bash
-for c in exp ln gam igr acln; do
-  ./ffbd run examples/example_input.txt --prefix runs/clock_$c --clock $c --seed 1 --burnin 100000 \
-      --ss 32 --ss-burn 100000 --ss-gens 1000000 --ss-every 200
-done
-grep -hv '^clock' runs/clock_*.ml.tsv | sort -t$'\t' -k7,7gr | cut -f1,7,8   # clock, stepping-stone, path sampling; best first
-```
-
-On the example this takes a few seconds per clock. Then date with the winner, for example `--clock gam` added to the run above.
+To choose one, estimate the marginal likelihood of each by stepping-stone sampling (`--ss K`, with K+1 powers between posterior and prior), then keep the highest. Step 1 of the quick start shows the commands; on the example this takes a few seconds per clock.
 
 - **Reading the result.** A difference of more than about 5 log units is strong evidence for the better clock. Smaller differences mean the data hardly prefer one clock; report the dates under the top two clocks.
 - **Settings for real trees.** Use many more proposals per power: test 5c uses 64 powers, each with 250 million proposals after 50 million of burn-in. Repeat with a second seed to check that the estimate is stable.
@@ -248,6 +248,7 @@ The real test clades are Gobiaria (24 living species, 10 fossils) and Protacanth
     - on a small example, the stepping-stone estimate matches a brute-force average of the likelihood over 500,000 prior draws within Monte Carlo error;
     - with the exponential clock, the program gives byte-identical output to the previous version.
 - **5d. Sampling fraction.** *Phylogram.* `ffbd` fixes rho, the fraction of living species in the tree. A 1,184-species phylogram (pruned from a genome-scale phylogram of a larger tree) with 1,588 fossils was dated at rho = 3.25, 10, 15, 25 and 50%.
+- **5e. More genes, known truth.** *Phylograms from simulated DNA.* Gene sets were simulated on the 100 trees of test 4b. The genes differ the way real genes do: each has its own rate, base composition and rate variation, and a few are fast, mitochondrial-like genes. There are two sets: 23 genes (about 18,000 sites), and 1,000 genes (about 500,000 sites) that include the 23. Each set was analyzed like the real clades: concatenated, with ML branch lengths on the true tree.
 
 **Answer.**
 
@@ -264,6 +265,7 @@ The real test clades are Gobiaria (24 living species, 10 fossils) and Protacanth
     | IGR | pending | pending | pending |
     | Autocorrelated lognormal | pending | pending | pending |
 - **5d. Rho matters less.** Raising rho from 3.25 to 50% makes crown ages younger: under 1% at the root (held by its prior) and up to 8% on younger crowns. At rho = 10%, no crown moves more than 2%.
+- **5e. More genes are more accurate, modestly.** With 1,000 genes, node ages are closer to the truth on 63% of nodes. The median error drops from 3.55 to 3.39 Myr (3.13 with perfect branch lengths), and 95% coverage rises from 89.5 to 90.7% (93.1% with perfect branch lengths). The gain is largest on nodes under 5 Ma. A 23-gene phylogram gives the same answer as 23-gene DNA (tests 4a and 5a), so this compares full-DNA FBD on the genes it can afford with `ffbd` on genome-scale data.
 
 ![Phylograms against 23-gene DNA](validation/phylogram_vs_dna_controlled.png)
 
@@ -306,7 +308,7 @@ Full-DNA FBD is slow, and that forces two compromises in practice. `ffbd` remove
 - **Full-DNA FBD in practice** is run on a few dozen genes or fewer. Here, RevBayes on 23 genes and about two dozen species took 22 to 25 hours per chain and still mixed poorly, so six chains had to be pooled. Running the same analysis on 36 times more sites, or on thousands of species, is out of reach.
 - **`ffbd`** reads the DNA only once, as branch lengths, so those can come from every gene of a genome-scale data set.
 - **What test 5a shows.** Given the same genes, `ffbd` matches full-DNA FBD, so the shortcut does not change the answer. The data do change it: all-gene branch lengths give ages a few million years younger, and they are 5 to 6 times more precise (standard error relative to branch length).
-- **Not yet shown.** Whether more genes give more accurate dates. A simulation comparing few-gene with many-gene branch lengths against known true ages will answer it (running).
+- **What test 5e shows.** With known true ages, 1,000 genes give more accurate dates than 23: closer to the truth on 63% of nodes, with the largest gain on young nodes. The simulated genes follow the analysis model, so the gain on real data may be smaller or larger.
 
 **2. The clock chosen by fit, not by habit.**
 
@@ -330,6 +332,7 @@ Full-DNA FBD is slow, and that forces two compromises in practice. `ffbd` remove
 | 5a | `ctrl_compare.py` | `phylogram_vs_dna_controlled.txt` |
 | 5b | `make_mb_dna.py`, `compare_mbdna.py` | `mrbayes_dna_A06_A12.txt` |
 | 5c | `clock_ss.py` (DNA, RevBayes); `ffbd --clock C --ss K` (phylogram); `clock_density_check.py` | `clock_checks.txt`; results pending |
+| 5e | `sim_genes.py`, `sim_genes_summary.py` | `sim_genes_100reps.txt` |
 | 6b | `examples/example_crown_stem.txt` | `crown_stem_test_11seeds.txt`, `regression_previous_release.txt` |
 | 6d | `ffbd_convert.py --auto-start` | `auto_start_check.txt` |
 | Figures | `validation_figures.py` | `validation/*.png` |
