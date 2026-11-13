@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test 4b: MrBayes 3.2.7 full-DNA FBD (make_mb_dna.py; IGR clock) against RevBayes full-DNA FBD (rb_e2, 6 chains, 23 genes) and
+"""Test 5b: MrBayes 3.2.7 full-DNA FBD (make_mb_dna.py; IGR clock) against RevBayes full-DNA FBD (rb_e2, 6 chains, 23 genes) and
 ffbd given the 23-gene phylogram (runs/ctrl_SET_g23_r*.log), on the extant node ages of A06 and A12. MrBayes tree lengths are
 rate x time, so each node age is (tree height - depth) / clockrate of that sample. The MrBayes prior-only run (same priors, no data)
 shows how much of each age comes from the DNA. First 10% of every chain dropped.

@@ -5,9 +5,9 @@
 
 DATADIR holds (any missing input skips its figure):
   three_A06.tsv, three_A12.tsv    compare_fixed3.py SET LOCALDIR OUT.tsv      (test 3a: ffbd, MrBayes, RevBayes; no data)
-  ctrl_A06.tsv, ctrl_A12.tsv      ctrl_compare.py SET --tsv OUT.tsv           (test 4e: phylograms against 23-gene DNA)
+  ctrl_A06.tsv, ctrl_A12.tsv      ctrl_compare.py SET --tsv OUT.tsv           (test 5a: phylograms against 23-gene DNA)
   sbc_ranks.tsv                   sbc_ranks.py SBCDIR OUT.tsv                 (test 2b: simulation-based calibration)
-  sim_study.tsv                   sim_study_summary.py SIMDIR OUT.tsv         (test 4c: simulation study)
+  sim_study.tsv                   sim_study_summary.py SIMDIR OUT.tsv         (test 4b: simulation study)
 """
 import csv, math, os, statistics as st, sys
 import matplotlib
@@ -93,7 +93,7 @@ if all(three.values()):
     fig.savefig(f'{O}/three_programs_no_data.png', dpi=160)
     print('wrote three_programs_no_data.png')
 
-# ---- test 4e: controlled test, phylograms against the 23-gene full DNA
+# ---- test 5a: controlled test, phylograms against the 23-gene full DNA
 ARMS = [('fullDNA noise', 'Full DNA, chains 1-3 vs 4-6 (noise)', GREY, 'o'), ('g23', '23-gene phylogram', BLUE, 'o'),
         ('allgene', 'All-gene phylogram (~580k sites)', ORANGE, 's'), ('large_tree_a', 'Larger-tree phylogram, pruned', AQUA, '^')]
 ctrl = {S: rows(f'ctrl_{S}.tsv') for S in NAMES}
@@ -115,7 +115,7 @@ if all(ctrl.values()):
         ax.set_xlabel('Node age, 23-gene full-DNA FBD (Ma, log scale)')
         ax.set_ylabel('Difference from full DNA (%)')
         ax.legend(loc='upper left', bbox_to_anchor=(0, -0.16), fontsize=8)
-    fig.suptitle('Test 4e. Same tree, fossils and priors; only the phylogram given to ffbd changes. '
+    fig.suptitle('Test 5a. Same tree, fossils and priors; only the phylogram given to ffbd changes. '
                  'Reference: RevBayes full-DNA FBD, 23 genes', x=0.01, ha='left', fontsize=10, color=INK)
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     fig.savefig(f'{O}/phylogram_vs_dna_controlled.png', dpi=160)
@@ -146,7 +146,7 @@ if sbc:
     fig.savefig(f'{O}/sbc_rank_histograms.png', dpi=160)
     print('wrote sbc_rank_histograms.png')
 
-# ---- test 4c: simulation study, coverage and error by node age
+# ---- test 4b: simulation study, coverage and error by node age
 sim = rows('sim_study.tsv')
 if sim:
     BINS = [(0, 5), (5, 10), (10, 20), (20, 40), (40, 60), (60, 101)]
@@ -176,7 +176,7 @@ if sim:
     axes[1].axhline(0, color=GREY, ls='--', lw=1)
     axes[1].set_ylabel('Median error of the posterior median (%)')
     axes[1].set_title('Bias of node ages (positive = too old)', loc='left', fontsize=10, color=INK)
-    fig.suptitle('Test 4c. 100 simulated trees (30 to 120 living species, 6,911 nodes), known true ages',
+    fig.suptitle('Test 4b. 100 simulated trees (30 to 120 living species, 6,911 nodes), known true ages',
                  x=0.01, ha='left', fontsize=10, color=INK)
     fig.tight_layout(rect=(0, 0, 1, 0.94))
     fig.savefig(f'{O}/simulation_coverage_by_age.png', dpi=160)

@@ -105,156 +105,158 @@ A clade constraint says a fossil belongs to a group, and that includes the group
 
 ## Validation
 
-Status as of 12 November 2026. Details, numbers and result files: [VALIDATION.md](VALIDATION.md) and `validation/`.
+Status as of 13 November 2026. All numbers, per-test details and result files are in [VALIDATION.md](VALIDATION.md) and `validation/`, with the same test numbers as here.
 
-### In plain language
+`ffbd` is new code, and it replaces the DNA with a phylogram. Both need to earn trust. The validation follows the standard recipe for Bayesian software (Cook et al. 2006; Talts et al. 2018; Mendes et al. 2025) and for FBD simulation studies (Heath et al. 2014; Barido-Sottani et al. 2019). It is organized as six questions. For each one: why it matters, how it was tested, and the answer.
 
-`ffbd` puts ages on the nodes of a phylogeny using fossils. It uses the fossilized birth-death (FBD) model, which treats the origin of species, their extinction and the preservation of fossils as one process. Each fossil has an age range, and the program works out where on the tree each fossil fits. The tree of living species stays fixed. The program never reads the DNA itself. Instead it reads a phylogram: the branch lengths of that fixed tree, estimated once from the DNA, each with a standard error (SE). This shortcut is what lets it date trees of thousands of species in hours rather than months. Because the method is new, it has to earn trust. The validation follows the standard recipe for Bayesian software (Cook et al. 2006; Talts et al. 2018; Mendes et al. 2025) and for FBD simulation studies (Heath et al. 2014; Barido-Sottani et al. 2019). That recipe asks four questions. Each test is labeled by the data it uses: no data (fossils and priors only), a phylogram, or the full DNA.
+### Short answers
 
-**Does it compute the right probabilities?** For fixed trees and settings, every term was compared with RevBayes, the established FBD program. The totals matched to within 4e-9, which is rounding error (test 1).
+| # | Question | Answer |
+|---|---|---|
+| 1 | Does `ffbd` compute the FBD probability correctly? | **Yes.** Every term matches RevBayes to within 4e-9 (rounding error). |
+| 2 | When the true answer is known, does it find it? | **Yes.** Simulations with known truth pass on trees of 2 to 8,056 living species. |
+| 3 | Does an independent program give the same answer? | **Yes.** MrBayes agrees within 0.5%. RevBayes 1.3.2 differs because of one move; with that move off, it agrees too. |
+| 4 | Does the phylogram shortcut give the same dates as the DNA? | **Yes, under the same model.** The differences are as small as those between DNA chains of the same analysis. |
+| 5 | What changes the dates more than the shortcut does? | **The genes behind the branch lengths, and the clock model.** The sampling fraction matters less. |
+| 6 | Does it work on large trees? | **Yes.** Chains converge at 2,424 species, and speed does not drop with tree size. |
 
-**Does it explore those probabilities correctly?** Hundreds of data sets were simulated with known true answers, to check that the truth lands where it should among the program's estimates. This check is simulation-based calibration (SBC). It passed on small trees, on realistic trees of up to 8,056 living species, and on a 3-species case with an exact answer (tests 2a to 2c).
+### Three kinds of data
 
-**Does it agree with other programs given the same model?** With no data and the same fixed rates, `ffbd` and MrBayes gave the same node ages (within about 0.5%) and the same number of sampled ancestors (test 3a). The two programs were written completely independently. Sampled ancestors are fossils that sit directly on a branch rather than on a side branch. RevBayes disagreed with both: it found about one extra sampled ancestor and made young nodes up to a third older. The likely cause is one RevBayes move, `mvCollapseExpandFossilBranch`, which is not reversible when fossils have age ranges. With that move switched off, RevBayes agrees with `ffbd` (test 3b). The RevBayes developers have not yet confirmed the problem. BEAST2 was not used, because it cannot hold the living-species tree fixed while fossils move, so it would be testing a different model.
+`ffbd` never reads DNA. Its data are a **phylogram**: the branch lengths of the fixed tree of living species, in substitutions per site, each with a standard error, estimated once from the DNA. Each test is labeled by what it uses:
 
-**Does the phylogram shortcut give the same answer as analyzing the full DNA?** This is the question that matters most in practice.
-- **Same DNA (test 4a).** On two fish clades, RevBayes analyzed the full 23-gene DNA in 6 long chains each, while `ffbd` got the phylogram from that same DNA. The ages agreed to 1.3 to 1.8% at the median. That is no larger than the differences between the DNA chains themselves.
-- **MrBayes (test 4b).** MrBayes analyzed the same DNA as a second, independent reference. It cannot run the clock that `ffbd` and RevBayes use, so it ran a different one, in which each branch draws its rate from a gamma distribution (independent gamma rates, IGR). On Gobiaria, all three agreed: MrBayes's DNA ages were within about 3% of both RevBayes's DNA ages and `ffbd`'s. On Protacanthopterygii, the two DNA programs disagreed with each other. MrBayes put the inner nodes about 10 million years younger, with intervals about twice as wide, while `ffbd` stayed with RevBayes, whose model it shares. Test 4b therefore shows that the clock model can change the dates more than the shortcut does. It does not point to a problem with the shortcut.
-- **Simulated DNA (test 4c).** On 100 simulated trees, the true ages fell inside the 95% interval 91% of the time with the shortcut and 93% without it.
-- **Catfishes (test 4d).** `ffbd` came close to an earlier full-DNA analysis, but that comparison is not like for like.
-- **Controlled test (test 4e).** Everything stayed identical except the phylogram. A phylogram from the same 23 genes reproduced the 23-gene DNA result. Phylograms built from about 1,100 genes, or taken from a larger genome-scale tree, gave ages 2.5 to 3.8 million years younger on average, still inside the DNA uncertainty. How the SEs were computed made no difference.
+- **No data**: fossils and priors only. This isolates the tree and fossil part of the model, where programs differ most.
+- **Phylogram**: branch lengths and standard errors, estimated from DNA or simulated.
+- **DNA**: the full alignment, analyzed by RevBayes or MrBayes as the reference. `ffbd` then gets a phylogram estimated from that same DNA.
 
-Two further checks passed. Very large runs converged, with two independent chains agreeing (test 5). The optional rules that force a fossil inside or outside a crown group behave exactly as intended (test 6).
+The real test clades are Gobiaria (24 living species, 10 fossils) and Protacanthopterygii (22 living species, 14 fossils), each with 23 genes (16,107 sites), plus catfishes (713 living species, 94 fossils) and the RevBayes bear tutorial.
 
-**What it all means.** The program does the math correctly, explores it correctly and agrees with an independent program. The phylogram shortcut costs essentially nothing compared with analyzing the same DNA under the same model. Two other choices matter more than the shortcut: the clock model (with a different clock, MrBayes dated one of two clades about 10 million years younger from the same DNA; test 4b), and which genes the branch lengths come from (test 4e). The known weak spot is shared with full-DNA FBD: very young nodes, under about 5 million years, tend to come out roughly 1 million years too old. This comes from the model and its priors, not from `ffbd` or its shortcut.
+### 1. Does `ffbd` compute the FBD probability correctly?
 
-### What kind of data each test uses
+**Why it matters.** Every result rests on the probability of a dated tree given the fossils and branch lengths. A small error there biases everything.
 
-`ffbd` never reads DNA. Its data are a **phylogram**: the branch lengths of the fixed tree, in substitutions per site, each with a standard error, estimated once from the DNA. Every test below says which of three kinds of data it uses:
+**How it was tested.** *No data and phylogram.* Fixed trees and parameter values were scored by `ffbd` and by RevBayes, the established FBD program, term by term: tree density, root prior, rate priors, branch-length terms and fossil windows. 89 states on 4 data sets.
 
-- **No data**: fossils and priors only. These tests check the tree and fossil part of the model, which is where programs differ most.
-- **Phylogram**: branch lengths and standard errors, either estimated from DNA or simulated.
-- **DNA**: the full sequence alignment, used by RevBayes or MrBayes as the reference. `ffbd` is then given a phylogram estimated from that same DNA.
+**Answer.** The totals match to within 4e-9, which is rounding error (test 1).
 
-### How a Bayesian dating program is validated
+### 2. When the true answer is known, does it find it?
 
-The standard checks for a new Bayesian method (Cook et al. 2006; Talts et al. 2018; Mendes et al. 2025) ask four questions. Simulation studies of FBD dating follow the same logic (Heath et al. 2014; Barido-Sottani et al. 2019).
+**Why it matters.** Correct probabilities are not enough; the sampler also has to explore them correctly. Bugs in proposals or bookkeeping show up only here.
 
-1. **Does it calculate the right probabilities?** For fixed trees and parameter values, compare every term with an established program.
-2. **Does it sample those probabilities correctly?** Simulate many data sets from known true values and check that the truth falls inside the 95% interval about 95% of the time. In simulation-based calibration, the rank of the true value among the posterior samples must be uniform.
-3. **Does it agree with other programs on the same model?**
-4. **Does the shortcut work?** Fast FBD replaces the DNA with a phylogram. On the same data, it should give the same ages as an analysis of the full DNA.
+**How it was tested.** *No data, and simulated phylograms.* Hundreds of data sets were simulated from the model with known true values, using separate simulation code. If the sampler is correct, the true value falls at a random position among the posterior samples, so its rank is uniform. This is simulation-based calibration (SBC).
 
-### Results
+- **2a.** Small trees, 500 replicates in each of 3 settings, 13 quantities.
+- **2b.** Realistic trees, 500 replicates of 2 to 8,056 living species and up to 15,838 fossils, 9 quantities.
+- **2c.** A 3-species case with an exact answer.
 
-| # | Question | Test | Data | Result |
-|---|---|---|---|---|
-| 1 | Right probabilities | Every probability term against RevBayes 1.3.2, on fixed trees (4 data sets, 89 states) | No data and phylogram | **Passed**: difference at most 4e-9 |
-| 2a | Correct sampling | Simulation-based calibration, small trees (500 replicates in each of 3 settings) | No data, and simulated phylogram | **Passed** |
-| 2b | Correct sampling | Simulation-based calibration, realistic trees (500 replicates, 2 to 8,056 living species) | Simulated phylogram | **Passed**: all 9 quantities uniform |
-| 2c | Correct sampling | A 3-species prior with an exact answer | No data | **Passed** |
-| 3a | Same answer as other programs | ffbd, MrBayes 3.2.7 and RevBayes 1.3.2 on the same fixed-rate prior (two fish clades) | No data | **ffbd = MrBayes** (node ages within 0.4 to 0.6% at the median, same number of sampled ancestors). **RevBayes differs** (3 to 7% at the median, up to 34%), because of one RevBayes move (below) |
-| 3b | Same answer as other programs | ffbd and RevBayes with that RevBayes move switched off | No data | **Agree**: 0.3 to 0.4% |
-| 4a | Shortcut works | ffbd against RevBayes full-DNA FBD, two fish clades (23 genes, 16,107 sites; 6 DNA chains per clade) | **DNA** (RevBayes) vs phylogram from the same DNA (ffbd) | **Agree**: node ages r = 0.9995 and 0.9997, median difference 1.3% and 1.8%, mean +0.5 and +0.7 Myr. That is within the noise between the DNA chains themselves (1.5% and 3.2%) |
-| 4b | Shortcut works; clock-model sensitivity | ffbd against MrBayes full-DNA FBD, the same two clades and genes. MrBayes cannot use the ffbd/RevBayes clock, so it runs independent gamma rates (IGR) | **DNA** (MrBayes) vs phylogram (ffbd) | **Gobiaria: agree** (MrBayes DNA vs ffbd 2.8% at the median; vs RevBayes DNA 3.1%). **Protacanthopterygii: the two DNA programs differ** (MrBayes about 10 Myr younger, 20% at the median, intervals about twice as wide); ffbd stays with RevBayes DNA (1.5%), which uses the same model. The clock changes these dates more than the shortcut does |
-| 4c | Shortcut works | 100 simulated trees (30 to 120 tips); ffbd given phylograms estimated from simulated DNA (2,000 sites) | Phylogram from **simulated DNA** | **Close to nominal**: true node ages inside the 95% interval 91% of the time (93% when the exact phylogram is used); nodes under 5 Ma about 1 Myr too old |
-| 4d | Shortcut works | Catfishes (713 living species, 94 fossils) against an earlier full-DNA RevBayes analysis | **DNA** (RevBayes, 21 genes) vs phylogram (ffbd) | **Close**: r = 0.994, ffbd 1.8 Myr younger on average. Not like for like: the earlier analysis used another clock and the RevBayes move below |
-| 4e | Which phylogram to use | Controlled test on the two clades of 4a: same tree, fossils and priors, only the phylogram changes. Reference: the 23-gene full DNA of 4a | **DNA** (RevBayes, 23 genes) vs phylograms from 23 genes, from all genes (about 580,000 sites), and from a genome-scale phylogram of a larger tree pruned to the clade | **23-gene phylogram = 23-gene DNA** (median 1.0% and 1.5%, within DNA chain noise). **More genes give younger ages**: all-gene phylogram 5 to 6% at the median, 2.5 to 2.7 Myr younger on average; pruned larger-tree phylogram 8 to 9%, 3.7 to 3.8 Myr younger. Every node stays inside the 23-gene DNA 95% interval. The standard-error rule makes no difference |
-| 5 | Large trees | Two chains each at 1,185 and 2,424 tips, 20 billion proposals | Phylogram | **Converged**: effective sample sizes 500 to 800 for the main parameters; chains agree on node ages to 0.9% (median) |
-| 6 | Crown and stem rules | Constrained runs against unconstrained runs filtered to the same rules | Phylogram (small example) | **Passed**: all quantities within 1.4 standard errors |
+**Answer.** All passed. Testing found and fixed two bugs along the way (a cached rate sum and a checkpoint restart), and all tests were rerun after the fixes.
 
-### Figures
+### 3. Does an independent program give the same answer?
 
-Figures appear in test order. Each caption says what the test asks, how to read the plot, and what it shows.
+**Why it matters.** Two programs written from the same equations can still share a mistake in the way they move through tree space. Agreement between independent code is strong evidence.
 
-![Simulation-based calibration](validation/sbc_rank_histograms.png)
+**How it was tested.** *No data.* `ffbd`, MrBayes 3.2.7 and RevBayes 1.3.2 got the same fixed tree of living species, the same fossils with age windows, and the same fixed speciation, extinction, fossil sampling and root age (test 3a). With no data, all three should give the same node ages and the same number of sampled ancestors, meaning fossils that sit directly on a branch rather than on a side branch. Test 3b reran RevBayes with one move switched off.
 
-**Test 2b. Does the sampler find the right answer when the truth is known?** *Data: simulated phylograms.*
-
-- **Setup.** 500 trees (2 to 8,056 living species) were simulated with known true values: speciation, extinction, fossil sampling, clock rate, root age, number of sampled ancestors, two crown ages and one fossil age. `ffbd` was run on each tree and drew 99 posterior samples.
-- **Rank.** For each tree, the rank is how many of the 99 samples fall below the true value (0 to 99). Each bar counts how many of the 500 trees had a rank in that bin, so each panel holds one histogram per parameter.
-- **How to read.** A correct sampler puts the true value at a random place among its samples, so the bars should be **flat**. The dashed line is the expected height and the dotted lines are the 99% range for chance.
-- **Bad shapes.** Too low at both ends means intervals too narrow, a hump in the middle means too wide, and a slope means bias.
-- **Result.** All nine panels are flat within chance (every uniformity test p > 0.0056, the threshold after correcting for 9 tests).
+**Answer.** `ffbd` and MrBayes agree (node ages within 0.4 to 0.6%, the same number of sampled ancestors). RevBayes finds about one extra sampled ancestor and makes young nodes up to a third older. The likely cause is the RevBayes move `mvCollapseExpandFossilBranch`, which is not reversible when fossils have age ranges (details in VALIDATION.md). With it off, RevBayes agrees with `ffbd` within 0.4% (test 3b). The RevBayes developers have not yet confirmed this. BEAST2 was not used, because it cannot hold the tree of living species fixed while fossils move.
 
 ![ffbd, MrBayes and RevBayes on the same prior](validation/three_programs_no_data.png)
 
-**Test 3a. Do independent programs give the same answer for the same model?** *Data: none.*
+*Test 3a.* Each dot is a node. Top: how far each program is from MrBayes, in %. Blue (`ffbd`) sits on zero; orange (RevBayes) sits above it, mostly on young nodes. Bottom: the number of sampled ancestors per tree. `ffbd` and MrBayes match; RevBayes is shifted by about one.
 
-- **Setup.** All three programs got the same fixed tree of living species, the same fossils with their age windows, and the same fixed speciation, extinction, fossil sampling and root age. With no DNA and no phylogram, the result is what the FBD model alone implies. All three programs implement the same model, so they should agree. MrBayes, written independently of `ffbd`, is the reference.
-- **Top panels.** Each dot is one node. The horizontal axis is its age in MrBayes. The vertical axis is how far the other program is from MrBayes, in %; the dashed line at 0 means the same answer.
-    - Blue (`ffbd`) dots sit on the line: median 0.4% and 0.6%, about the same as two MrBayes chains differ from each other.
-    - Orange (RevBayes 1.3.2) dots are mostly above it: up to 34% older, mainly on nodes younger than 30 Ma.
-- **Bottom panels.** A sampled ancestor is a fossil placed directly on a branch, as an ancestor of later species, instead of on its own side branch. Each group of bars counts the sampled ancestors in one posterior tree; the height is the share of trees with that count.
-    - Blue (`ffbd`) and green (MrBayes) bars match.
-    - Orange (RevBayes) is shifted right, by about one extra sampled ancestor per tree.
-- **Result.** `ffbd` agrees with MrBayes; RevBayes is the odd one out. See "Why RevBayes differs" below.
+### 4. Does the phylogram shortcut give the same dates as the DNA?
+
+**Why it matters.** This is the question that matters most in practice. The shortcut is what makes `ffbd` fast, so it must not change the answer.
+
+**How it was tested.**
+
+- **4a. Same DNA, same model.** *DNA vs phylogram.* RevBayes ran full-DNA FBD on the 23 genes of each test clade (6 chains of 22 to 25 hours each, with the move from test 3 removed). `ffbd` got the phylogram estimated from the same 23 genes, with the same fossils, priors and clock.
+- **4b. Simulated DNA, known true ages.** *Phylogram from simulated DNA.* 100 simulated trees of 30 to 120 species, with DNA simulated on them, analyzed exactly as for real clades.
+- **4c. Catfishes.** *DNA vs phylogram.* An earlier full-DNA analysis of 713 species. It is not like for like, because it used another clock and the RevBayes move from test 3.
+
+**Answer.**
+
+- **4a.** The ages agree to 1.3 and 1.8% at the median, which is no more than the DNA chains differ from each other (1.5 and 3.2%). Roots agree to 0.1 Myr.
+- **4b.** The true ages fall inside the 95% interval 91% of the time with the shortcut, against 93% with exact branch lengths. Nodes under 5 Ma come out about 1 Myr too old with or without the shortcut, so that bias comes from the model and priors.
+- **4c.** The ages are close (r = 0.994), but not identical.
 
 ![Node ages, full-DNA FBD against Fast FBD](validation/node_ages_full_vs_fast.png)
 
-**Tests 4a and 4d. Does the phylogram shortcut give the same ages as running FBD on the DNA?** *Data: DNA (RevBayes full-DNA FBD) against a phylogram (`ffbd`).*
+*Tests 4a and 4c.* Each dot is a node. Horizontal: its age from full-DNA FBD. Vertical: its age from `ffbd`. On the diagonal means the same age.
 
-- **How to read.** Each dot is one node of the living-species time tree. The horizontal axis is its age from full-DNA FBD and the vertical axis is its age from `ffbd`. Dots on the dashed diagonal mean the same age.
-- **Gobiaria and Protacanthopterygii (test 4a).** Both sides used the same 23 genes, fossils and priors. RevBayes ran the DNA (6 chains, collapse-expand move removed) and `ffbd` was given the phylogram estimated from that same alignment.
-    - Every dot sits on the line: r = 0.999 and 1.000, and `ffbd` is 0.5 and 0.7 Myr older on average, within the noise between DNA chains.
-- **Catfishes (test 4d).** An earlier full-DNA RevBayes analysis (21 genes) against `ffbd`. This is not like for like, because the earlier run used another clock and the original RevBayes moves.
-    - The dots are close but more scattered: r = 0.994, `ffbd` 1.8 Myr younger on average.
+### 5. What changes the dates more than the shortcut does?
 
-![Simulation study, coverage by node age](validation/simulation_coverage_by_age.png)
+**Why it matters.** If the shortcut is not the weak link, users should know what is.
 
-**Test 4c. With known true ages, are the intervals right, and are ages biased?** *Data: phylograms, exact (blue) or estimated from simulated DNA (orange).*
+**How it was tested.**
 
-- **Setup.** 100 simulated trees with 6,911 nodes in all. Nodes are grouped by true age along the horizontal axis; *n* is the number of nodes in each group.
-- **Left panel.** This shows how often the true age falls inside the 95% interval. The target is the dashed line at 0.95.
-    - Overall it is 93% with the exact phylogram and 91% with the phylogram estimated from DNA.
-- **Right panel.** This shows the typical error of the estimated age, in %. Above 0 means too old.
-    - Nodes younger than 5 Ma come out about 1 Myr too old.
-- **Result.** The exact and DNA-estimated lines are close. The young-node bias shows up in both, so it comes from the model and prior, not from the phylogram shortcut.
+- **5a. Which genes.** *DNA vs several phylograms.* Everything stayed the same except the phylogram given to `ffbd`: one from the same 23 genes, one from all genes (about 1,100 genes, 580,000 sites), and one from a genome-scale phylogram of a larger tree, pruned to the clade.
+- **5b. Which clock, by a second DNA program.** *DNA vs phylogram.* MrBayes ran full-DNA FBD on the same 23 genes. MrBayes cannot run the clock that `ffbd` and RevBayes use (one exponential rate per branch), so it used independent gamma rates (IGR).
+- **5c. Which clock fits the DNA best.** *DNA.* Six clocks are being compared by marginal likelihood (stepping-stone and path sampling in RevBayes) on the same 23 genes: strict, exponential (the `ffbd` default), lognormal (also in `ffbd`), gamma, IGR and an autocorrelated lognormal clock. Node ages are either fixed at the DNA estimates or estimated with fossil minimum ages.
+- **5d. Sampling fraction.** *Phylogram.* `ffbd` fixes rho, the fraction of living species in the tree. A 1,184-species phylogram (pruned from a genome-scale phylogram of a larger tree) with 1,588 fossils was dated at rho = 3.25, 10, 15, 25 and 50%.
+
+**Answer.**
+
+- **5a. The genes matter.** The 23-gene phylogram reproduces the 23-gene DNA analysis (1.0 and 1.5% at the median). Phylograms from all genes make nodes 2.5 to 3.8 Myr younger on average, still inside the DNA 95% intervals. How the standard errors were computed makes no difference.
+- **5b. The clock can matter.** On Gobiaria, MrBayes agrees with both RevBayes and `ffbd` (about 3%). On Protacanthopterygii, the two DNA programs disagree: MrBayes puts the inner nodes about 10 Myr younger, with intervals twice as wide, while `ffbd` stays with RevBayes, whose clock it shares.
+- **5c.** Running; results will be added here.
+- **5d. Rho matters less.** Raising rho from 3.25 to 50% makes crown ages younger: under 1% at the root (held by its prior) and up to 8% on younger crowns. At rho = 10%, no crown moves more than 2%.
 
 ![Phylograms against 23-gene DNA](validation/phylogram_vs_dna_controlled.png)
 
-**Test 4e. Does it matter which phylogram `ffbd` is given?** *Data: DNA (RevBayes, 23 genes) against several phylograms.*
+*Test 5a.* Each dot is a node. Vertical: how far `ffbd` is from the 23-gene DNA analysis, in %. Grey is the noise between DNA chains, blue the 23-gene phylogram, orange the all-gene phylogram and green the pruned larger-tree phylogram. Blue sits with grey; orange and green sit lower (younger).
 
-- **Setup.** The tree, fossils and priors are the same in every run. Only the phylogram changes.
-- **How to read.** Each dot is one node. The horizontal axis is its age from 23-gene full-DNA FBD. The vertical axis is how far each `ffbd` run is from that age, in %. Dots near 0 agree with the DNA; below 0 means younger.
-- **What the colors are.**
-    - Grey: two halves of the DNA chains against each other, the noise floor.
-    - Blue: the phylogram from the same 23 genes.
-    - Orange: the phylogram from all genes, about 580,000 sites.
-    - Green: a genome-scale phylogram of a larger tree, pruned to the clade.
-- **Result.**
-    - Blue sits with grey, so the 23-gene phylogram gives the 23-gene DNA answer.
-    - Orange and green sit lower: more genes give ages 2.5 to 3.8 Myr younger, still inside the DNA 95% intervals.
+### 6. Does it work on large trees?
 
-### Why RevBayes differs, and what MrBayes and BEAST2 show
+**Why it matters.** Large trees are the reason `ffbd` exists.
 
-With no data, ffbd and RevBayes 1.3.2 disagree whenever fossils have age ranges and can become sampled ancestors, meaning fossils that lie directly on a branch rather than on a side branch. RevBayes finds more sampled ancestors and makes young nodes older, by up to a third on some two-species nodes. The probabilities are identical (test 1), and the programs agree once one RevBayes move, `mvCollapseExpandFossilBranch`, is switched off (test 3b). In the RevBayes 1.3.2 source, that move draws the new attachment age above the maximum of the fossil's age window. The reverse move can start from attachments inside the window, so the move is not reversible.
+**How it was tested.** *Phylogram.*
 
-MrBayes 3.2.7 (Zhang et al. 2016) is independent code. Given the same fixed tree, fossils and fixed rates, with no data, it agrees with ffbd and not with RevBayes (test 3a). Test 3a uses no data because the disagreement comes from how trees and fossils are proposed, not from the DNA. With DNA (test 4b), MrBayes has to use a different clock (IGR). It agrees with RevBayes and ffbd on Gobiaria, and gives younger ages than both on Protacanthopterygii.
+- **6a. Convergence.** Two independent chains each were run at 1,185 and 2,424 species, with 20 billion proposals each (about 2 hours on one core).
+- **6b. Crown and stem rules.** The optional rules that keep a fossil inside or outside a crown group were compared with unconstrained runs filtered to the same rules.
+- **6c. Speed.** Speed was measured at both tree sizes.
 
-BEAST2's sampled-ancestor package (Gavryushkina et al. 2014) was not used. Its clade constraints count fossils as clade members, so it cannot hold the living-species tree fixed while fossils move within their clades.
+**Answer.** The chains converge (effective sample sizes 500 to 800 for the main parameters; the two chains agree on node ages to 0.9% at the median). The rules behave exactly as intended (all quantities within 1.4 standard errors). Speed is the same at both sizes, about 2.6 million proposals per second.
 
-The RevBayes developers have not yet confirmed the move problem. `--rb-sa-move` imitates that proposal, for testing only.
+### What the validation shows, and what it does not
 
-### What this means
+**It shows that:**
 
-- **ffbd computes and samples the FBD model correctly** (tests 1, 2): its probabilities match RevBayes to 4e-9, and simulations with known answers pass on trees of up to 8,056 living species.
-- **With no data, an independent program, MrBayes, gives the same answer as ffbd.** RevBayes 1.3.2 with its default moves does not.
-- **With DNA, the phylogram shortcut gives the same ages as full-DNA FBD under the same model** on two clades (test 4a): the differences are as small as those between DNA chains. On simulated DNA, interval coverage is close to the target 95%.
-- **The clock model can matter more than the shortcut** (test 4b). MrBayes, which must use a different clock (IGR), agrees on Gobiaria but dates Protacanthopterygii about 10 Myr younger than both RevBayes and ffbd, from the same DNA.
-- **The genes behind the phylogram matter more than the shortcut** (test 4e). A phylogram from the same 23 genes reproduces the 23-gene DNA analysis. Phylograms from many more genes give ages a few million years younger, inside the 23-gene intervals.
-- **The weak spot is very young nodes**: in simulations, nodes under 5 Ma come out about 1 Myr too old, with or without the shortcut.
+- `ffbd` computes and samples the FBD model correctly (questions 1 and 2).
+- An independent program, MrBayes, gives the same answer (question 3).
+- Given the same DNA and model, the phylogram shortcut gives the same dates as analyzing the DNA (question 4).
 
-### Why ffbd may do better than full-DNA FBD on real data
+**It does not show that:**
 
-Test 4e separates two questions that are usually mixed up: does the shortcut change the answer, and do the data change the answer?
+- **The dates are true.** The true ages of real clades are unknown. More genes and better clocks reduce error, but model error remains.
+- **The clock is right.** The clock and the genes behind the branch lengths can move dates more than the shortcut does (question 5), so they deserve the same care as fossil choice.
+- **Very young nodes are accurate.** Nodes under about 5 Ma tend to come out about 1 Myr too old. This comes from the model and priors, and full-DNA FBD shares it.
+- **The topology is right.** The topology of living species is assumed, not tested.
 
-- **The shortcut does not change the answer.** Given a phylogram from the same 23 genes, `ffbd` reproduces full-DNA FBD on those 23 genes as closely as the DNA chains reproduce each other (tests 4a, 4e).
-- **The data do change it.** Keep the same tree, fossils and priors, and swap the 23-gene phylogram for one estimated from about 1,100 genes (about 580,000 sites). Node ages then move 2.5 to 3.8 million years younger on average, and up to 46% on some young nodes. They still stay inside the 23-gene 95% intervals.
+### Why `ffbd` may do better than full-DNA FBD on real data
 
-In practice, full-DNA FBD is run on a few dozen genes or fewer, because it is slow. Here, each RevBayes chain on 23 genes and about two dozen species took 22 to 25 hours and still mixed poorly (node-age ESS about 20 to 35 per chain), so six chains had to be pooled. The same analysis on 36 times more sites, or on thousands of species, is not practical. `ffbd` takes the branch lengths from whatever data set they come from, including genome-scale ones, and runs in minutes. So under real-life conditions the two approaches do not analyze the same data. Full-DNA FBD is limited to a small gene set, while `ffbd` can use branch lengths estimated from all the genes. The all-gene branch lengths are also far more precise: their standard errors are 5 to 6 times smaller relative to branch length (median SE/b about 0.02 against 0.12 for 23 genes).
+Full-DNA FBD is limited in practice to a few dozen genes, because it is slow. Here, RevBayes on 23 genes and about two dozen species took 22 to 25 hours per chain and still mixed poorly, so six chains had to be pooled. `ffbd` takes branch lengths from any data set, including genome-scale ones, and runs in minutes. Test 5a separates the two issues:
 
-**What this does not show.** These are real clades, so the true ages are unknown, and test 4e cannot say which answer is right. More genes reduce sampling error in the branch lengths but not model error. For example, one substitution model is applied to all genes, and concatenation ignores gene-tree conflict. One plausible reason the all-gene trees are 17 to 24% shorter is the gene mix. The two fast-evolving mitochondrial genes (COI, CYTB) are a sizable part of the 23-gene set but less than 2% of the all-gene sites. The claim is therefore narrower than "ffbd is more accurate". The shortcut costs nothing, and it is what makes genome-scale branch lengths usable in FBD dating. A simulation that compares few-gene with many-gene branch lengths against known true ages would test whether that turns into more accurate dates.
+- **The shortcut does not change the answer:** given the same genes, `ffbd` matches full-DNA FBD.
+- **The data do change it:** all-gene branch lengths give ages a few million years younger. They are also 5 to 6 times more precise (standard error relative to branch length).
+
+Whether that makes the dates more accurate is not tested here. A simulation comparing few-gene with many-gene branch lengths against known true ages would answer it.
+
+### Reproducing the tests
+
+| Test | Script | Result file |
+|---|---|---|
+| 1 | `density_check.py` | `density_check_A06_A12.txt`, `density_check_bears_catfish.txt` |
+| 2a | `sbc.py` | `sbc_with_data_500reps.txt`, `sbc_prior_only_500reps.txt`, `sbc_origin_mode_500reps.txt` |
+| 2b | `sim_study.py sbc`, `sbc_ranks.py` | `sbc_realistic_500reps.txt`, `sbc_rank_histograms.png` |
+| 2c | `analytic_check.py` | `analytic_check.txt` |
+| 3a | `make_fixed3.py`, `compare_fixed3.py` | `three_program_prior_A06_A12.txt`, `compare_pilots_summary.txt` |
+| 3b | `compare_runs.py` | `E1_noCE_summary.txt` |
+| 4a, 4c | `branch_scatter.py --ages-only` | `node_ages_full_vs_fast.tsv` |
+| 4b | `sim_study.py simulate`, `sim_study_summary.py` | `sim_study_100reps.txt`, `simulation_coverage_by_age.png` |
+| 5a | `ctrl_compare.py` | `phylogram_vs_dna_controlled.txt` |
+| 5b | `make_mb_dna.py`, `compare_mbdna.py` | `mrbayes_dna_A06_A12.txt` |
+| 5c | `clock_ss.py` | (running) |
+| 6b | `examples/example_crown_stem.txt` | `crown_stem_test_11seeds.txt`, `regression_previous_release.txt` |
+| Figures | `validation_figures.py` | `validation/*.png` |
 
 ### References
 
@@ -266,6 +268,7 @@ In practice, full-DNA FBD is run on a few dozen genes or fewer, because it is sl
 - Mendes FK, Bouckaert R, Carvalho LM, Drummond AJ (2025). How to validate a Bayesian evolutionary model. *Systematic Biology*, doi:10.1093/sysbio/syae064.
 - Ronquist F, Teslenko M, van der Mark P, et al. (2012). MrBayes 3.2: efficient Bayesian phylogenetic inference and model choice across a large model space. *Systematic Biology* 61: 539-542.
 - Talts S, Betancourt M, Simpson D, Vehtari A, Gelman A (2018). Validating Bayesian inference algorithms with simulation-based calibration. arXiv:1804.06788.
+- Xie W, Lewis PO, Fan Y, Kuo L, Chen MH (2011). Improving marginal likelihood estimation for Bayesian phylogenetic model selection. *Systematic Biology* 60: 150-160.
 - Zhang C, Stadler T, Klopfstein S, Heath TA, Ronquist F (2016). Total-evidence dating under the fossilized birth-death process. *Systematic Biology* 65: 228-249.
 
 ## Known limits
