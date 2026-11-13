@@ -8,9 +8,9 @@ A fast Bayesian program for dating phylogenies with fossils, using the **fossili
 
 FBD dating treats fossils as real tips on the tree, instead of turning them into minimum ages on nodes. That uses all the fossils, not just the oldest ones, but standard programs become extremely slow on large trees.
 
-`ffbd` makes this practical with two ideas, and adds a third step that full-DNA FBD rarely manages on large trees:
+`ffbd` makes this practical with two ideas, and adds a third step. Two things that full-DNA FBD rarely manages on large trees follow: using all the genes, and choosing the clock by fit.
 
-1. **Fast FBD.** The DNA alignment is summarized once, as a tree of branch lengths with a standard error for each branch. The program then asks how well each proposed set of dates and rates explains those branch lengths, instead of recalculating the full DNA likelihood.
+1. **Fast FBD.** The DNA alignment is summarized once, as a tree of branch lengths with a standard error for each branch. The program then asks how well each proposed set of dates and rates explains those branch lengths, instead of recalculating the full DNA likelihood. Because the DNA is read only once, the branch lengths can come from all the genes of a genome-scale data set. Full-DNA FBD is in practice limited to a few dozen genes.
 2. **Local updates.** When one age changes, only the affected terms are recalculated. Cost per step does not grow with tree size.
 3. **Clock fitting.** Five clock models are built in. Their marginal likelihoods can be estimated on the same phylogram (`--ss`), so the clock is chosen by fit on the tree being dated, not by habit. With full-DNA FBD, this kind of fitting is practical only for small clades.
 
@@ -299,14 +299,21 @@ The real test clades are Gobiaria (24 living species, 10 fossils) and Protacanth
 
 ### Why `ffbd` may do better than full-DNA FBD on real data
 
-Full-DNA FBD is limited in practice to a few dozen genes, because it is slow. Here, RevBayes on 23 genes and about two dozen species took 22 to 25 hours per chain and still mixed poorly, so six chains had to be pooled. `ffbd` takes branch lengths from any data set, including genome-scale ones, and runs in minutes. Test 5a separates the two issues:
+Full-DNA FBD is slow, and that forces two compromises in practice. `ffbd` removes both.
 
-- **The shortcut does not change the answer:** given the same genes, `ffbd` matches full-DNA FBD.
-- **The data do change it:** all-gene branch lengths give ages a few million years younger. They are also 5 to 6 times more precise (standard error relative to branch length).
+**1. All the genes, not a few dozen.**
 
-Whether that makes the dates more accurate is not tested here. A simulation comparing few-gene with many-gene branch lengths against known true ages would answer it.
+- **Full-DNA FBD in practice** is run on a few dozen genes or fewer. Here, RevBayes on 23 genes and about two dozen species took 22 to 25 hours per chain and still mixed poorly, so six chains had to be pooled. Running the same analysis on 36 times more sites, or on thousands of species, is out of reach.
+- **`ffbd`** reads the DNA only once, as branch lengths, so those can come from every gene of a genome-scale data set.
+- **What test 5a shows.** Given the same genes, `ffbd` matches full-DNA FBD, so the shortcut does not change the answer. The data do change it: all-gene branch lengths give ages a few million years younger, and they are 5 to 6 times more precise (standard error relative to branch length).
+- **Not yet shown.** Whether more genes give more accurate dates. A simulation comparing few-gene with many-gene branch lengths against known true ages will answer it (running).
 
-**Choosing the clock on the tree that is dated.** RevBayes and MrBayes also offer several clocks and stepping-stone sampling, but on DNA that pipeline is practical only for small clades. Here, one RevBayes stepping-stone run for one clock on 22 to 24 species and 23 genes took 1.5 to 10 hours on 8 cores. Repeating that for every clock on a tree of 1,184 species and 1,588 fossils is out of reach. In practice, full-DNA FBD studies therefore pick one clock and rarely test it. `ffbd` runs the whole pipeline on the phylogram of the tree actually being dated, on one core per clock: fit five clocks by marginal likelihood (test 5c), keep the best, and date with it.
+**2. The clock chosen by fit, not by habit.**
+
+- **Full-DNA FBD in practice.** RevBayes and MrBayes offer several clocks and stepping-stone sampling, but on DNA fitting them is practical only for small clades. Here, one RevBayes stepping-stone run for one clock on 22 to 24 species and 23 genes took 1.5 to 10 hours on 8 cores. Repeating that for every clock on 1,184 species and 1,588 fossils is out of reach, so studies pick one clock and rarely test it.
+- **`ffbd`** runs the whole pipeline on the phylogram of the tree actually being dated, one core per clock: it fits five clocks by marginal likelihood, keeps the best, and dates with it.
+- **What test 5b shows.** The clock matters. On the same DNA, a different clock moved some dates by about 10 million years.
+- **Not yet shown.** Which clock fits these data best (test 5c, running).
 
 ### Reproducing the tests
 
