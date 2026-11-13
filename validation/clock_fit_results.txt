@@ -1,0 +1,61 @@
+Clock-model marginal likelihoods, 13 Nov 2026 (stepping-stone, path sampling).
+DNA: RevBayes 1.3.2, scripts/clock_ss.py; columns: set, clock, node ages (rb = fixed at RevBayes DNA medians, mb = fixed at MrBayes DNA medians, free = estimated with fossil minimums), seed, stepping-stone, path sampling.
+Free-age runs still in progress are missing.
+
+A06	acln	mb	9100	-62490.85	-62490.7	
+A06	acln	rb	9100	-62485.76	-62485.82	
+A06	acln	rb	9200	-62486.36	-62486.06	
+A06	exp	free	9200	-62572.73	-62573.28	
+A06	exp	mb	9100	-62480.78	-62481.34	
+A06	exp	rb	9100	-62479.92	-62480.22	
+A06	exp	rb	9200	-62479.78	-62480.2	
+A06	gam	free	9100	-62566.14	-62566.41	
+A06	gam	free	9200	-62566.3	-62566.87	
+A06	gam	mb	9100	-62475.82	-62476.2	
+A06	gam	rb	9100	-62472.84	-62473.44	
+A06	gam	rb	9200	-62472.31	-62472.82	
+A06	igr	mb	9100	-62491.74	-62492.09	
+A06	igr	rb	9100	-62499.59	-62499.71	
+A06	igr	rb	9200	-62497.37	-62497.31	
+A06	ln	mb	9100	-62472.23	-62472.07	
+A06	ln	rb	9100	-62470.6	-62470.48	
+A06	ln	rb	9200	-62471.65	-62471.76	
+A06	strict	free	9100	-63087.68	-63088.03	
+A06	strict	mb	9100	-63126.89	-63127.05	
+A06	strict	rb	9100	-63210.41	-63210.66	
+A06	strict	rb	9200	-63210.97	-63211.19	
+A12	acln	free	9100	-48617.35	-48617.39	
+A12	acln	free	9200	-48617.47	-48617.58	
+A12	acln	mb	9100	-48497.37	-48497.47	
+A12	acln	rb	9100	-48512.57	-48512.48	
+A12	acln	rb	9200	-48511.38	-48511.33	
+A12	exp	free	9100	-48632.22	-48632.08	
+A12	exp	mb	9100	-48519.48	-48519.73	
+A12	exp	rb	9100	-48520.83	-48520.91	
+A12	exp	rb	9200	-48522.04	-48522.32	
+A12	gam	mb	9100	-48503.19	-48503.48	
+A12	gam	rb	9100	-48510.55	-48510.88	
+A12	gam	rb	9200	-48511.31	-48511.58	
+A12	igr	mb	9100	-48515.1	-48514.79	
+A12	igr	rb	9100	-48544.29	-48544.37	
+A12	igr	rb	9200	-48545.22	-48544.77	
+A12	ln	mb	9100	-48499.91	-48500.1	
+A12	ln	rb	9100	-48510.02	-48510.2	
+A12	ln	rb	9200	-48508.56	-48508.3	
+A12	strict	free	9100	-48772.68	-48773.15	
+A12	strict	free	9200	-48772.21	-48772.46	
+A12	strict	mb	9100	-48733.05	-48733.3	
+A12	strict	rb	9100	-49031.64	-49031.9	
+A12	strict	rb	9200	-49032.15	-49032.37
+
+Phylogram: ffbd --ss 64 on the 1,184-species phylogram (1,588 fossils); columns: clock, seed, stepping-stone, path sampling (unusable at this size), run time.
+acln	s1101	5709.827759	-67900.778336	12764 s
+acln	s1102	5712.747125	-14636.577662	12833 s
+exp	s1101	5609.030308	-40986.402838	8881 s
+exp	s1102	5603.127371	-37358.044972	8903 s
+gam	s1101	5745.615054	-24301.040011	11277 s
+gam	s1102	5761.351496	-35591.157063	11433 s
+igr	s1101	5264.450615	-16376.850885	13588 s
+igr	s1102	5315.016221	-15929.031750	13655 s
+ln	s1101	5746.880354	-19228.440699	10451 s
+ln	s1102	5749.435423	-23691.232246	10569 s
