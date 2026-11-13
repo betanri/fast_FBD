@@ -36,6 +36,7 @@ Status as of 13 November 2026. This file holds the numbers behind the [README Va
 | | 5d | Sampling fraction (rho) | Phylogram | Up to 8% younger at rho 50% |
 | 6. Large trees | 6a | Convergence at 1,185 and 2,424 tips | Phylogram | Passed |
 | | 6b | Crown and stem rules | Phylogram | Passed |
+| | 6d | Automatic starting tree | Phylogram | Passed: valid on 1,184 species; same answer as a supplied start |
 | | 6c | Speed | Phylogram | No slowdown with size |
 
 ## 1. Right probabilities
@@ -368,6 +369,26 @@ Overstating rho makes dates somewhat younger, but even a 15-fold error moves the
     - **Result.** The rules held in every sample of the constrained runs, and all quantities agreed within 1.4 standard errors (`validation/crown_stem_test_11seeds.txt`).
     - **Further checks.** A crown-only test with 2 seeds also agreed. `--check` runs, which validate the full state after every proposal, raised no error.
 2. **Regression.** With no crown or stem rules, the new version gives byte-identical log and tree files to the previous release on A06, A12, bears and catfish, with and without DNA (`validation/regression_previous_release.txt`).
+
+### 6d. Automatic starting tree (passed)
+
+*Data: phylogram.* Without an `initial.nwk`, or with `--auto-start`, `scripts/ffbd_convert.py` builds the starting tree from the tree of living species, the fossil windows and the clade constraints:
+
+- **Fossils.** Each fossil goes on the stem of the smallest constraint containing it, at its minimum age. Fossils on one stem are stacked from the smallest constraint up.
+- **Crown-rule fossils** go on the stem of the crown node's first child.
+- **Node ages** start at the mean path height of the tree's branch lengths, scaled to the initial root age. They are then pushed up 0.01 Myr above any child or fossil, and to the minimum of any node calibration.
+
+The converter then runs the same checks as on a supplied tree. If the tree cannot be built, it stops with a message, for example when a constraint's living species are not a clade of the tree.
+
+Tests (`validation/auto_start_check.txt`):
+
+1. **Validity.** The automatic trees pass every check on A06, A12 and two 1,184-species sets: 1,588 and 1,587 fossils, 430 constraints, crown and stem rules, and hard minimum ages on calibrated nodes. Apart from the starting tree, the input files are identical to those built from the supplied start (the internal node numbering follows the tree shape). A per-step consistency check (`--check-every-step`, 20,000 proposals) raised no error.
+2. **Same answer.** A06 and A12 were run from both starts (200 million proposals, the same seed). Node-age medians:
+
+| Data set | Median difference | Largest | Root, supplied vs automatic |
+|---|---|---|---|
+| A06 | 0.17% | 0.73% | 74.83 vs 74.82 Ma |
+| A12 | 0.29% | 1.12% | 138.60 vs 138.53 Ma |
 
 ### 6c. Speed
 
