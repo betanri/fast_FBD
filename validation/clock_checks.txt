@@ -1,0 +1,16 @@
+New clocks and stepping-stone in ffbd (ffbd.cpp, 13 Nov 2026): checks before the 1.2k runs. Data: phylogram.
+Clocks: exp (default), ln, gam, igr, acln (definitions in ffbd.cpp, lnRateTerm; the same as in scripts/clock_ss.py for RevBayes)
+
+1. Regression: default clock, ucln input and --no-data give byte-identical .log/.trees to the previous binary (examples/example_input.txt,
+   example_crown_stem.txt; 3M proposals, seed 7).
+2. Cache check (--check-every-step, full recompute after every proposal): no error for all five clocks on the 4-species example (300k
+   proposals) and on a 1,184-species input (5k proposals).
+3. Clock prior density against scipy.stats (scripts/clock_density_check.py), largest |ffbd - scipy| over states:
+   example (6 branches): exp 7e-15, ln 6e-14, gam 2e-14, igr 9e-9, acln 2e-9
+   1,184-species phylogram (2,366 branches): gam 4e-12, igr 3e-7, acln 1e-6   (igr/acln: ages read from the log at 10 significant digits)
+4. Prior recovery (--no-data, 2e8 proposals): hyperparameter marginal = its Exp prior (KS p ln 0.43, gam 0.65, igr 0.97, acln 0.38),
+   mean rate m = Exp(10) (KS p 0.69, 0.98, 0.79, 0.71), every branch-rate mean 0.097 to 0.104 (expected 0.1).
+5. Stepping-stone against brute force (mean of the likelihood over 500,000 prior draws), 4-species example, ln marginal likelihood:
+   exp 7.387 vs 7.393 +- 0.013; igr 7.286 vs 7.291 +- 0.010; acln 7.468 vs 7.466 +- 0.009. Path sampling about 0.1 lower (discretization).
+6. Speed on the 1,184-species input (laptop, 20M proposals): exp 5.9 s, gam 6.9 s, igr 7.4 s, acln 8.1 s.
+

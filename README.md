@@ -94,13 +94,21 @@ A clade constraint says a fossil belongs to a group, and that includes the group
 | `--checkpoint N`, `--resume` | Save progress and continue a run exactly where it stopped |
 | `--mode control` | Run without molecular data, to see what the fossils and priors alone imply |
 | `--log-rates` | Also log branch rates |
+| `--clock exp\|ln\|gam\|igr\|acln` | Clock model (see below); default exponential |
+| `--ss K --ss-gens G` | Instead of a normal run, estimate the marginal likelihood of the phylogram by stepping-stone sampling with K+1 powers, to compare clock models |
 | `--check` | Check internal consistency while running (slow) |
 
 ## The model
 
 - Constant-rate fossilized birth-death process with sampled ancestors, conditioned on the root age. The density matches RevBayes 1.3.2 `dnBDSTP` inside `dnConstrainedTopology`.
 - Fossil ages are uniform within their windows.
-- Clock: one rate per branch of the living-species tree, exponential by default or uncorrelated lognormal.
+- Clock: one rate per branch of the living-species tree, with mean rate m ~ Exp(10). Five clock priors (`--clock`):
+    - `exp` (default): each rate ~ Exponential(mean m).
+    - `ln`: uncorrelated lognormal, mean m.
+    - `gam`: each rate ~ Gamma(shape k, mean m).
+    - `igr`: independent gamma rates as in MrBayes; the rate variance shrinks on longer branches.
+    - `acln`: autocorrelated lognormal; each branch's rate is centered on its parent branch's rate, with variance growing with branch duration.
+- The clock with the best fit can be chosen by marginal likelihood (`--ss`; test 5c).
 - Data: for each branch, observed length ~ Normal(rate x time, standard error). The two branches at the root share one observation.
 
 ## Validation
@@ -190,14 +198,31 @@ The real test clades are Gobiaria (24 living species, 10 fossils) and Protacanth
 
 - **5a. Which genes.** *DNA vs several phylograms.* Everything stayed the same except the phylogram given to `ffbd`: one from the same 23 genes, one from all genes (about 1,100 genes, 580,000 sites), and one from a genome-scale phylogram of a larger tree, pruned to the clade.
 - **5b. Which clock, by a second DNA program.** *DNA vs phylogram.* MrBayes ran full-DNA FBD on the same 23 genes. MrBayes cannot run the clock that `ffbd` and RevBayes use (one exponential rate per branch), so it used independent gamma rates (IGR).
-- **5c. Which clock fits the DNA best.** *DNA.* Six clocks are being compared by marginal likelihood (stepping-stone and path sampling in RevBayes) on the same 23 genes: strict, exponential (the `ffbd` default), lognormal (also in `ffbd`), gamma, IGR and an autocorrelated lognormal clock. Node ages are either fixed at the DNA estimates or estimated with fossil minimum ages.
+- **5c. Which clock fits best.** Clocks are compared by marginal likelihood, which measures how well each model predicts the data while penalizing extra flexibility (stepping-stone sampling; Xie et al. 2011). There are two complementary fits:
+    - *DNA.* RevBayes on the 23 genes of the two test clades, with six clocks: strict, exponential (the `ffbd` default), lognormal, gamma, IGR and autocorrelated lognormal. Node ages are either fixed at the DNA estimates or estimated with fossil minimum ages.
+    - *Phylogram.* `ffbd` itself (`--ss`) on the 1,184-species phylogram used for dating, with all five `ffbd` clocks.
+
+    The best-fitting clock will be used for the final dates. Three of the clocks (gamma, IGR, autocorrelated lognormal) and the stepping-stone code are new, so they first passed the same kinds of checks as questions 1 and 2:
+    - their prior densities match an independent implementation (scipy) to rounding error;
+    - with no data they recover their priors exactly;
+    - on a small example, the stepping-stone estimate matches a brute-force average of the likelihood over 500,000 prior draws within Monte Carlo error;
+    - with the default clock, the program gives byte-identical output to the previous version.
 - **5d. Sampling fraction.** *Phylogram.* `ffbd` fixes rho, the fraction of living species in the tree. A 1,184-species phylogram (pruned from a genome-scale phylogram of a larger tree) with 1,588 fossils was dated at rho = 3.25, 10, 15, 25 and 50%.
 
 **Answer.**
 
 - **5a. The genes matter.** The 23-gene phylogram reproduces the 23-gene DNA analysis (1.0 and 1.5% at the median). Phylograms from all genes make nodes 2.5 to 3.8 Myr younger on average, still inside the DNA 95% intervals. How the standard errors were computed makes no difference.
 - **5b. The clock can matter.** On Gobiaria, MrBayes agrees with both RevBayes and `ffbd` (about 3%). On Protacanthopterygii, the two DNA programs disagree: MrBayes puts the inner nodes about 10 Myr younger, with intervals twice as wide, while `ffbd` stays with RevBayes, whose clock it shares.
-- **5c.** Running; results will be added here.
+- **5c. Results pending** (runs in progress, 13 November 2026). The best clock in each column will be marked; differences above about 5 log units count as strong evidence.
+
+    | Clock | DNA, Gobiaria | DNA, Protacanthopterygii | Phylogram, 1,184 species |
+    |---|---|---|---|
+    | Strict | pending | pending | not in `ffbd` |
+    | Exponential (default) | pending | pending | pending |
+    | Lognormal | pending | pending | pending |
+    | Gamma | pending | pending | pending |
+    | IGR | pending | pending | pending |
+    | Autocorrelated lognormal | pending | pending | pending |
 - **5d. Rho matters less.** Raising rho from 3.25 to 50% makes crown ages younger: under 1% at the root (held by its prior) and up to 8% on younger crowns. At rho = 10%, no crown moves more than 2%.
 
 ![Phylograms against 23-gene DNA](validation/phylogram_vs_dna_controlled.png)
@@ -254,7 +279,7 @@ Whether that makes the dates more accurate is not tested here. A simulation comp
 | 4b | `sim_study.py simulate`, `sim_study_summary.py` | `sim_study_100reps.txt`, `simulation_coverage_by_age.png` |
 | 5a | `ctrl_compare.py` | `phylogram_vs_dna_controlled.txt` |
 | 5b | `make_mb_dna.py`, `compare_mbdna.py` | `mrbayes_dna_A06_A12.txt` |
-| 5c | `clock_ss.py` | (running) |
+| 5c | `clock_ss.py` (DNA, RevBayes); `ffbd --clock C --ss K` (phylogram); `clock_density_check.py` | `clock_checks.txt`; results pending |
 | 6b | `examples/example_crown_stem.txt` | `crown_stem_test_11seeds.txt`, `regression_previous_release.txt` |
 | Figures | `validation_figures.py` | `validation/*.png` |
 

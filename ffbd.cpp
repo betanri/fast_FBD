@@ -4,7 +4,7 @@
 // Model (matches RevBayes 1.3.2 dnBDSTP(rootAge|originAge, lambda, mu, psi, rho, r=0, taxa) inside dnConstrainedTopology):
 // - FBD density as in BirthDeathSamplingTreatmentProcess::computeLnProbabilityTimes + lnProbTreeShape.
 // - Each fossil age is uniform in its window (density 1/(max-min+2e-4), the same constant as the Rev window terms).
-// - Mode "fast": rate_i ~ Exp(mean m), m ~ Exp(10), b_obs_j ~ Normal(|sum rate_i*time_i|, se_j) (edges of the unrooted tree).
+// - Mode "fast": rate_i ~ clock prior (default Exp(mean m); see lnRateTerm), m ~ Exp(10), b_obs_j ~ Normal(|sum rate_i*time_i|, se_j) (edges of the unrooted tree).
 // - Mode "control": no rates, no data.
 #include <algorithm>
 #include <array>
@@ -108,6 +108,8 @@ struct Options {
     string mode = ""; // "", "fast", "control"
     bool resume = false, check = false, noData = false, rbSA = false, logRates = false, logFossils = false, fixFbd = false; bool checkPerStep = false;
     string dumpFile = ""; long dumpEvery = 0; string noMoves = "";
+    string clock = ""; double hyperRate = -1, initHyper = -1;                     // --clock exp|ln|gam|igr|acln, --hyper-rate, --init-hyper
+    int ssStones = 0; double ssAlpha = 0.3; long ssGens = 0, ssBurn = 0, ssEvery = 1000; // --ss K: stepping-stone with K+1 powers (Xie et al. 2011)
 };
 
 class Chain {
@@ -140,6 +142,9 @@ public:
     // parameters
     double lam = 0, mu = 0, psi = 0, m = 0; vector<double> rates; double sumRates = 0;
     bool ucln = false; double sigma = 0.5; vector<double> calLo, calHi; // UCLN clock (catfish) and uniform calibrations on extant node ages
+    int clk = 0; double hyperRate = 3.0; bool timeDep = false;          // clock model (see lnRateTerm); timeDep: igr, acln (prior depends on branch time)
+    vector<int> pb; vector<array<int, 2>> chB; vector<int> nCh;          // parent branch and child branches of each branch (extant tree)
+    double beta = 1.0;                                                   // power on the data term (stepping-stone / path sampling)
     FBD P;
 
     // cached log densities
@@ -164,16 +169,43 @@ public:
     inline double branchTime(int i) const { double pa = age[bpar[i]], ca = bch[i] < 0 ? 0.0 : age[bch[i]]; return fabs(pa - ca); }
     double termMean(int j) const { double s = 0; for (int b : tb[j]) s += rates[b] * branchTime(b); return fabs(s); }
     inline double termLL(int j) const { return -0.5 * LN2PI - lnSe[j] - 0.5 * sq((obs[j] - termMean(j)) / se[j]); }
-    inline double lnRateP1(double r) const {
-        if (ucln) { double z = (log(r) - uclnMu) / sigma; return -log(r) - log(sigma) - 0.5 * LN2PI - 0.5 * z * z; }
+    // ---- clock models. clk: 0 exp (rate ~ Exp(mean m)), 1 ln (uncorrelated lognormal, mean m, sd of log rate = sigma),
+    // 2 gam (rate ~ Gamma(shape k, rate k/m), k = sigma), 3 igr (independent gamma rates, MrBayes: shape t/v, rate t/(v m), v = sigma),
+    // 4 acln (autocorrelated lognormal: log r ~ N(log r_parent - s^2 t/2, s^2 t), s = sigma; branches at the root use m as parent rate).
+    // igr and acln use t = branch time + 0.01 Myr. m ~ Exp(10); hyperparameter sigma ~ Exp(hyperRate).
+    static double lnLognorm(double r, double mu_, double sd) { double z = (log(r) - mu_) / sd; return -log(r) - log(sd) - 0.5 * LN2PI - 0.5 * z * z; }
+    static double lnGamma(double r, double a, double b) { return a * log(b) - lgamma(a) + (a - 1.0) * log(r) - b * r; }
+    inline double lnRateTerm(int b, double r, double pr, double mm, double ss) const {
+        switch (clk) {
+            case 0: return log(1.0 / mm) - r / mm;
+            case 1: return lnLognorm(r, log(mm) - 0.5 * ss * ss, ss);
+            case 2: return lnGamma(r, ss, ss / mm);
+            case 3: { double t = branchTime(b) + 0.01; return lnGamma(r, t / ss, t / (ss * mm)); }
+            default: { double t = branchTime(b) + 0.01; return lnLognorm(r, log(pr) - 0.5 * ss * ss * t, ss * sqrt(t)); }
+        }
+    }
+    inline double lnRateB(int b) const { return lnRateTerm(b, rates[b], pb[b] >= 0 ? rates[pb[b]] : m, m, sigma); }
+    inline double lnRateP1(double r) const { // exp and ln only (clocks whose term needs no branch time or parent rate)
+        if (clk == 1) { double z = (log(r) - uclnMu) / sigma; return -log(r) - log(sigma) - 0.5 * LN2PI - 0.5 * z * z; }
         return log(1.0 / m) - r / m;
     }
-    double rateLnPrior() const { double s = 0; for (double r : rates) s += lnRateP1(r); s += log(10.0) - 10.0 * m; if (ucln) s += log(3.0) - 3.0 * sigma; return s; }
+    double lnHyperClock(double ss) const { return clk == 0 ? 0.0 : log(hyperRate) - hyperRate * ss; }
     double rateLnPriorGiven(const vector<double> &rs, double mNew, double sNew) const {
-        double uMu = log(mNew) - 0.5 * sNew * sNew, s = 0;
-        for (double r : rs) { if (ucln) { double z = (log(r) - uMu) / sNew; s += -log(r) - log(sNew) - 0.5 * LN2PI - 0.5 * z * z; } else s += log(1.0 / mNew) - r / mNew; }
-        s += log(10.0) - 10.0 * mNew; if (ucln) s += log(3.0) - 3.0 * sNew; return s;
+        double s = 0;
+        if (clk <= 1) { double uMu = log(mNew) - 0.5 * sNew * sNew; for (double r : rs) { if (clk == 1) { double z = (log(r) - uMu) / sNew; s += -log(r) - log(sNew) - 0.5 * LN2PI - 0.5 * z * z; } else s += log(1.0 / mNew) - r / mNew; } }
+        else for (int b = 0; b < K; b++) s += lnRateTerm(b, rs[b], pb[b] >= 0 ? rs[pb[b]] : mNew, mNew, sNew);
+        s += log(10.0) - 10.0 * mNew; s += lnHyperClock(sNew); return s;
     }
+    double rateLnPrior() const { return rateLnPriorGiven(rates, m, sigma); }
+    // branches whose prior term changes when the rates of branches bs change (themselves, plus their child branches under acln)
+    int rateSet(const int *bs, int nb, array<int, 12> &out) const {
+        int k = 0;
+        auto add = [&](int b) { for (int i = 0; i < k; i++) if (out[i] == b) return; out[k++] = b; };
+        for (int i = 0; i < nb; i++) { add(bs[i]); if (clk == 4) for (int q = 0; q < nCh[bs[i]]; q++) add(chB[bs[i]][q]); }
+        return k;
+    }
+    double localRateP(const array<int, 12> &s, int k) const { double x = 0; for (int i = 0; i < k; i++) x += lnRateB(s[i]); return x; }
+    array<int, 12> nodeBranches12(int v) const { array<int, 12> a{}; for (int i = 0; i < nNodeBranches[v]; i++) a[i] = nodeBranches[v][i]; return a; }
     void setLabel(int v, int L);
     void prune(int p, int s, int g); void attach(int p, int f, int c, double a);
     int pickRegion(int C, int p, int f);
@@ -187,7 +219,7 @@ public:
     void validate();
 
     // output
-    void run(); void writeHeader(FILE *lf, FILE *tf); void writeLog(FILE *lf); void writeTree(FILE *tf);
+    void run(); void runSS(); bool step(int mv); int pickMove(); void tuneHit(int mv, bool ok); void writeHeader(FILE *lf, FILE *tf); void writeLog(FILE *lf); void writeTree(FILE *tf);
     string newick() const; void saveCheckpoint(const string &p) const; void loadCheckpoint(const string &p);
     void dumpState(FILE *f);
     void summary() const;
@@ -268,6 +300,20 @@ void Chain::read(const string &path) {
 
 void Chain::init() {
     if (!hasClock) { K = 0; J = 0; bpar.clear(); bch.clear(); tb.clear(); obs.clear(); se.clear(); lnSe.clear(); }
+    // clock model: the input's rate_prior (exp or ucln) unless --clock is given
+    clk = ucln ? 1 : 0;
+    if (!opt.clock.empty()) {
+        const char *cn[] = {"exp", "ln", "gam", "igr", "acln"}; clk = -1;
+        for (int i = 0; i < 5; i++) if (opt.clock == cn[i]) clk = i;
+        if (clk < 0) die("unknown --clock " + opt.clock);
+        if (!ucln || clk != 1) sigma = clk == 1 ? 0.5 : clk == 2 ? 1.0 : clk == 3 ? 0.1 : 0.05;   // default start values
+    }
+    ucln = (clk == 1); timeDep = (clk >= 3);
+    hyperRate = clk == 1 ? 3.0 : clk == 2 ? 1.0 : 10.0;
+    if (opt.hyperRate > 0) hyperRate = opt.hyperRate;
+    if (opt.initHyper > 0) sigma = opt.initHyper;
+    pb.assign(K, -1); chB.assign(K, array<int, 2>{-1, -1}); nCh.assign(K, 0);
+    for (int b = 0; b < K; b++) for (int q = 0; q < K; q++) if (bch[q] >= 0 && bch[q] == bpar[b]) { pb[b] = q; if (nCh[q] >= 2) die("branch with >2 child branches"); chB[q][nCh[q]++] = b; }
     rates.assign(K, m); if ((int)initRates.size() == K) rates = initRates; sumRates = accumulate(rates.begin(), rates.end(), 0.0);
     uclnMu = log(m) - 0.5 * sigma * sigma;
     // fossil windows: constant window density (Rev: 1/(max-min+2e-4)), hard bounds in the model
@@ -389,12 +435,15 @@ bool Chain::moveNode() {
     if (hi <= lo) return false;
     double oldA = age[v], newA = lo + rng.u() * (hi - lo);
     double dF = P.lnD(newA) - P.lnD(oldA);
-    double dD = 0;
+    double dD = 0, dP = 0;
     array<double, 4> nv{};
+    bool tdv = timeDep && nNodeBranches[v] > 0;
+    if (tdv) dP -= localRateP(nodeBranches12(v), nNodeBranches[v]);
     age[v] = newA;
+    if (tdv) dP += localRateP(nodeBranches12(v), nNodeBranches[v]);
     if (useData && nNodeTerms[v] > 0) for (int i = 0; i < nNodeTerms[v]; i++) { int j = nodeTerms[v][i]; nv[i] = termLL(j); dD += nv[i] - tll[j]; }
-    if (log(rng.u()) < dF + dD) {
-        lnFBD += dF; lnData += dD;
+    if (log(rng.u()) < dF + beta * dD + dP) {
+        lnFBD += dF; lnData += dD; lnRatePrior += dP;
         if (useData) for (int i = 0; i < nNodeTerms[v]; i++) tll[nodeTerms[v][i]] = nv[i];
         return true;
     }
@@ -413,14 +462,17 @@ bool Chain::moveCoupled() {
     double dF = P.lnD(newA) - P.lnD(oldA);
     int nb = nNodeBranches[v]; array<double, 3> oldT{}, newT{}, oldR{}, newR{};
     for (int i = 0; i < nb; i++) { oldT[i] = branchTime(nodeBranches[v][i]); }
+    array<int, 12> S{}; int nS = 0; double before = 0;
+    if (clk >= 2) { nS = rateSet(nodeBranches[v].data(), nb, S); before = localRateP(S, nS); }
     age[v] = newA;
     double hast = 0, dP = 0;
     for (int i = 0; i < nb; i++) {
         int b = nodeBranches[v][i]; newT[i] = branchTime(b);
         if (newT[i] <= 0 || oldT[i] <= 0) { age[v] = oldA; return false; }
         oldR[i] = rates[b]; newR[i] = oldR[i] * oldT[i] / newT[i];
-        hast += log(oldT[i] / newT[i]); dP += lnRateP1(newR[i]) - lnRateP1(oldR[i]);
+        hast += log(oldT[i] / newT[i]); if (clk < 2) dP += lnRateP1(newR[i]) - lnRateP1(oldR[i]);
     }
+    if (clk >= 2) { for (int i = 0; i < nb; i++) rates[nodeBranches[v][i]] = newR[i]; dP = localRateP(S, nS) - before; for (int i = 0; i < nb; i++) rates[nodeBranches[v][i]] = oldR[i]; }
     if (log(rng.u()) < dF + dP + hast) {
         lnFBD += dF; lnRatePrior += dP;
         for (int i = 0; i < nb; i++) { rates[nodeBranches[v][i]] = newR[i]; sumRates += newR[i] - oldR[i]; }
@@ -566,9 +618,12 @@ bool Chain::moveRoot(bool coupled) {
     if (coupled && ext && hasClock) {
         int nb = nNodeBranches[root]; array<double, 3> oT{}, nT{}, oR{}, nR{};
         for (int i = 0; i < nb; i++) oT[i] = branchTime(nodeBranches[root][i]);
+        array<int, 12> S{}; int nS = 0; double before = 0;
+        if (clk >= 2) { nS = rateSet(nodeBranches[root].data(), nb, S); before = localRateP(S, nS); }
         age[root] = newA;
         double hast = 0, dP = 0;
-        for (int i = 0; i < nb; i++) { int b = nodeBranches[root][i]; nT[i] = branchTime(b); oR[i] = rates[b]; nR[i] = oR[i] * oT[i] / nT[i]; hast += log(oT[i] / nT[i]); dP += lnRateP1(nR[i]) - lnRateP1(oR[i]); }
+        for (int i = 0; i < nb; i++) { int b = nodeBranches[root][i]; nT[i] = branchTime(b); oR[i] = rates[b]; nR[i] = oR[i] * oT[i] / nT[i]; hast += log(oT[i] / nT[i]); if (clk < 2) dP += lnRateP1(nR[i]) - lnRateP1(oR[i]); }
+        if (clk >= 2) { for (int i = 0; i < nb; i++) rates[nodeBranches[root][i]] = nR[i]; dP = localRateP(S, nS) - before; for (int i = 0; i < nb; i++) rates[nodeBranches[root][i]] = oR[i]; }
         if (log(rng.u()) < dF + dP0 + dP + hast) {
             lnFBD += dF; lnRoot += dP0; lnRatePrior += dP;
             for (int i = 0; i < nb; i++) { rates[nodeBranches[root][i]] = nR[i]; sumRates += nR[i] - oR[i]; }
@@ -576,11 +631,14 @@ bool Chain::moveRoot(bool coupled) {
         }
         age[root] = oldA; return false;
     }
+    double dD = 0, dPt = 0; array<double, 4> nv{};
+    bool tdv = timeDep && ext && nNodeBranches[root] > 0;
+    if (tdv) dPt -= localRateP(nodeBranches12(root), nNodeBranches[root]);
     age[root] = newA;
-    double dD = 0; array<double, 4> nv{};
+    if (tdv) dPt += localRateP(nodeBranches12(root), nNodeBranches[root]);
     if (useData && ext) for (int i = 0; i < nNodeTerms[root]; i++) { int j = nodeTerms[root][i]; nv[i] = termLL(j); dD += nv[i] - tll[j]; }
-    if (log(rng.u()) < dF + dP0 + dD) {
-        lnFBD += dF; lnRoot += dP0; lnData += dD;
+    if (log(rng.u()) < dF + dP0 + beta * dD + dPt) {
+        lnFBD += dF; lnRoot += dP0; lnData += dD; lnRatePrior += dPt;
         if (useData && ext) for (int i = 0; i < nNodeTerms[root]; i++) tll[nodeTerms[root][i]] = nv[i];
         return true;
     }
@@ -602,11 +660,14 @@ bool Chain::moveRate() {
     int b = rng.below(K);
     double c = exp(tRate.val * (rng.u() - 0.5)), oldR = rates[b], newR = oldR * c;
     if (newR < 1e-100 || newR > 1e100) return false;
-    double dP = lnRateP1(newR) - lnRateP1(oldR), dD = 0;
+    double dP = 0, dD = 0;
+    array<int, 12> S{}; int nS = 0;
+    if (clk >= 2) { nS = rateSet(&b, 1, S); dP = -localRateP(S, nS); } else dP = lnRateP1(newR) - lnRateP1(oldR);
     rates[b] = newR;
+    if (clk >= 2) dP += localRateP(S, nS);
     int term = bTerm[b]; double nv = 0;
     if (useData && term >= 0) { nv = termLL(term); dD = nv - tll[term]; }
-    if (log(rng.u()) < dP + dD + log(c)) {
+    if (log(rng.u()) < dP + beta * dD + log(c)) {
         lnRatePrior += dP; lnData += dD; sumRates += newR - oldR; if (useData && term >= 0) tll[term] = nv; return true;
     }
     rates[b] = oldR; return false;
@@ -623,7 +684,7 @@ bool Chain::moveMean() {
 }
 
 bool Chain::moveSigma() {
-    if (K == 0 || !ucln) return false;
+    if (K == 0 || clk == 0) return false;
     double c = exp(tSigma.val * (rng.u() - 0.5)), oldS = sigma, newS = sigma * c;
     double nP = rateLnPriorGiven(rates, m, newS);
     double dP = nP - lnRatePrior;
@@ -641,7 +702,7 @@ bool Chain::moveJoint() {
     double dP = nP - lnRatePrior, dD = 0; vector<double> nv;
     if (useData) { nv.resize(J); for (int j = 0; j < J; j++) { nv[j] = termLL(j); dD += nv[j] - tll[j]; } }
     double hast = (K + 1) * log(c);
-    if (log(rng.u()) < dP + dD + hast) {
+    if (log(rng.u()) < dP + beta * dD + hast) {
         m = newM; uclnMu = log(m) - 0.5 * sigma * sigma; lnRatePrior = nP; lnData += dD; sumRates *= c; if (useData) tll = nv; return true;
     }
     rates = old; return false;
@@ -656,7 +717,7 @@ bool Chain::moveVector() {
     double dP = nP - lnRatePrior, dD = 0; vector<double> nv;
     if (useData) { nv.resize(J); for (int j = 0; j < J; j++) { nv[j] = termLL(j); dD += nv[j] - tll[j]; } }
     double hast = K * log(c);
-    if (log(rng.u()) < dP + dD + hast) { lnRatePrior = nP; lnData += dD; sumRates *= c; if (useData) tll = nv; return true; }
+    if (log(rng.u()) < dP + beta * dD + hast) { lnRatePrior = nP; lnData += dD; sumRates *= c; if (useData) tll = nv; return true; }
     rates = old; return false;
 }
 
@@ -693,7 +754,7 @@ void Chain::setupMoves() {
     weights[M_COLLEXP] = max(1.0, nf / 2.0);
     if (!useOrigin) { weights[M_ROOT] = 5 + ne / 50; if (hasClock) weights[M_ROOTC] = 5 + ne / 50; } else weights[M_ORIGIN] = 5;
     if (opt.fixFbd) { weights[M_ROOT] = weights[M_ROOTC] = weights[M_ORIGIN] = 0; }
-    if (hasClock) { weights[M_RATE] = K; weights[M_RATESCALE_JOINT] = 3; weights[M_RATESCALE_ALL] = 2; weights[M_MEAN] = 5; if (ucln) weights[M_SIGMA] = 5; }
+    if (hasClock) { weights[M_RATE] = K; weights[M_RATESCALE_JOINT] = 3; weights[M_RATESCALE_ALL] = 2; weights[M_MEAN] = 5; if (clk > 0) weights[M_SIGMA] = 5; }
     if (!opt.fixFbd) { weights[M_LAMBDA] = 3; weights[M_MU] = 3; weights[M_PSI] = 3; weights[M_UPDOWN] = 2; }
     for (int i = 0; i < N_MOVES; i++) if (opt.noMoves.find(MOVE_NAMES[i]) != string::npos) weights[i] = 0.0;
     cum.resize(N_MOVES); totalW = 0; for (int i = 0; i < N_MOVES; i++) { totalW += weights[i]; cum[i] = totalW; }
@@ -777,7 +838,7 @@ void Chain::writeHeader(FILE *lf, FILE *tf) {
     fprintf(lf, "Iteration\tPosterior\tLikelihood\tPrior\tcond_age\troot_age_tree\tnum_samp_anc\tspeciation_rate\textinction_rate\tpsi\tdiversification\tturnover");
     if (useOrigin) fprintf(lf, "\torigin_time");
     for (auto &nm : extName) fprintf(lf, "\tage_%s", nm.c_str());
-    if (hasClock) { fprintf(lf, "\tbranch_rates_mean\tmean_rt\tmean_rate"); if (ucln) fprintf(lf, "\tucln_sigma"); if (opt.logRates) for (int b = 0; b < K; b++) fprintf(lf, "\tbranch_rates[%d]", b + 1); }
+    if (hasClock) { fprintf(lf, "\tbranch_rates_mean\tmean_rt\tmean_rate"); if (clk > 0) { const char *hn[] = {"", "ucln_sigma", "gam_k", "igr_v", "acln_s"}; fprintf(lf, "\t%s", hn[clk]); } if (opt.logRates) for (int b = 0; b < K; b++) fprintf(lf, "\tbranch_rates[%d]", b + 1); }
     if (opt.logFossils) for (int f = n; f < N; f++) fprintf(lf, "\tage_%s\tsa_%s", names[f].c_str(), names[f].c_str());
     fprintf(lf, "\n");
     fprintf(tf, "Iteration\tPosterior\tLikelihood\tPrior\tfbd_tree\n");
@@ -791,7 +852,7 @@ void Chain::writeLog(FILE *lf) {
     fprintf(lf, "%ld\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g\t%d\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g", iter, like + prior, like, prior, cond, age[root], nsa, lam, mu, psi, lam - mu, mu / lam);
     if (useOrigin) fprintf(lf, "\t%.10g", origin);
     for (int v : extNode) fprintf(lf, "\t%.10g", age[v]);
-    if (hasClock) { fprintf(lf, "\t%.10g\t%.10g\t%.10g", m, meanR, meanR); if (ucln) fprintf(lf, "\t%.10g", sigma); if (opt.logRates) for (int b = 0; b < K; b++) fprintf(lf, "\t%.10g", rates[b]); }
+    if (hasClock) { fprintf(lf, "\t%.10g\t%.10g\t%.10g", m, meanR, meanR); if (clk > 0) fprintf(lf, "\t%.10g", sigma); if (opt.logRates) for (int b = 0; b < K; b++) fprintf(lf, "\t%.10g", rates[b]); }
     if (opt.logFossils) for (int f = n; f < N; f++) fprintf(lf, "\t%.10g\t%d", age[f], (int)sa[f]);
     fprintf(lf, "\n");
 }
@@ -954,8 +1015,73 @@ void Chain::run() {
     printf("FINAL lnPost %.6f\n", lnFBD + lnRoot + lnHyper + lnRatePrior + lnData + lnWin);
 }
 
+// ---- stepping-stone and path sampling of the marginal likelihood of the data (the phylogram terms) -------------------------------
+// Powers beta_i = (i/K)^(1/alpha), i = K..0 (Xie et al. 2011), visited from 1 down to 0 in one chain. The target at each power is
+// prior x L^beta (L = the phylogram terms; fossil windows, tree, root and clock priors are prior). Stepping-stone: sum over i of
+// log mean_{samples at beta_{i-1}} exp((beta_i - beta_{i-1}) lnL). Path sampling: trapezoid rule on mean lnL over beta.
+int Chain::pickMove() { double r = rng.u() * totalW; int mv = int(lower_bound(cum.begin(), cum.end(), r) - cum.begin()); return mv >= N_MOVES ? N_MOVES - 1 : mv; }
+bool Chain::step(int mv) {
+    switch (mv) {
+        case M_NODE: return moveNode(); case M_COUPLED: return moveCoupled(); case M_FOSAGE: return moveFossilAge();
+        case M_REGRAFT_L: return moveRegraft(true); case M_REGRAFT_G: return moveRegraft(false); case M_COLLEXP: return moveCollapseExpand();
+        case M_ROOT: return moveRoot(false); case M_ROOTC: return moveRoot(true); case M_ORIGIN: return moveOrigin();
+        case M_RATE: return moveRate(); case M_RATESCALE_JOINT: return moveJoint(); case M_RATESCALE_ALL: return moveVector(); case M_MEAN: return moveMean(); case M_SIGMA: return moveSigma();
+        case M_LAMBDA: return moveFBDScale(0); case M_MU: return moveFBDScale(1); case M_PSI: return moveFBDScale(2); case M_UPDOWN: return moveUpDown();
+    }
+    return false;
+}
+void Chain::tuneHit(int mv, bool ok) {
+    Tune *tm[N_MOVES] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &tRootS, &tRootCo, &tOrigin, &tRate, &tJoint, &tVec, &tMean, &tSigma, &tLam, &tMu, &tPsi, &tUD};
+    if (tm[mv]) { bool slide = (mv == M_ROOT || mv == M_ROOTC || mv == M_ORIGIN); tm[mv]->hit(ok); tm[mv]->adapt(slide ? 0.44 : 0.30, 1e-6, slide ? 200.0 : 2.0); }
+}
+void Chain::runSS() {
+    if (!useData || K == 0) die("--ss needs mode fast with data");
+    const int KS = opt.ssStones; const char *cn[] = {"exp", "ln", "gam", "igr", "acln"};
+    vector<double> pw(KS + 1); for (int i = 0; i <= KS; i++) pw[i] = pow((double)i / KS, 1.0 / opt.ssAlpha);
+    FILE *pf = fopen((opt.prefix + ".pp").c_str(), "w"); if (!pf) die("cannot open output");
+    fprintf(pf, "stone\tpower\titeration\tlikelihood\tprior_clock\n");
+    printf("ffbd ss: taxa %d (extant %d, fossils %d), clock %s, hyper prior rate %g, %d+1 powers (alpha %g), %ld proposals per power after %ld burn-in, sample every %ld\n",
+           N, n, mF, cn[clk], hyperRate, KS, opt.ssAlpha, opt.ssGens, opt.ssBurn, opt.ssEvery);
+    auto t0 = chrono::steady_clock::now();
+    beta = 1.0;
+    for (long b = 0; b < opt.burnin; b++) { int mv = pickMove(); bool ok = step(mv); tuneHit(mv, ok); }
+    recomputeAll();
+    vector<vector<double>> L(KS + 1); long it = 0;
+    for (int i = KS; i >= 0; i--) {
+        beta = pw[i];
+        for (long b = 0; b < opt.ssBurn; b++) { int mv = pickMove(); bool ok = step(mv); tuneHit(mv, ok); }
+        for (long g = 1; g <= opt.ssGens; g++) {
+            int mv = pickMove(); bool ok = step(mv); att[mv]++; if (ok) acc[mv]++; it++;
+            if (g % opt.ssEvery == 0) { L[i].push_back(lnData); fprintf(pf, "%d\t%.10g\t%ld\t%.10g\t%.10g\n", i, beta, it, lnData, lnRatePrior); }
+            if (it % 5000000 == 0) recomputeAll();
+            if (opt.checkPerStep) validate();
+        }
+        if (opt.check) validate();
+        double mL = accumulate(L[i].begin(), L[i].end(), 0.0) / L[i].size();
+        printf("power %3d  beta %.6g  mean lnL %.6f  (%.0f s)\n", i, beta, mL, chrono::duration<double>(chrono::steady_clock::now() - t0).count()); fflush(stdout);
+    }
+    fclose(pf);
+    double ss = 0, ps = 0;
+    for (int i = 1; i <= KS; i++) {
+        double d = pw[i] - pw[i - 1], mx = -INFINITY, acc_ = 0;
+        for (double l : L[i - 1]) mx = max(mx, d * l);
+        for (double l : L[i - 1]) acc_ += exp(d * l - mx);
+        ss += mx + log(acc_ / L[i - 1].size());
+        double m1 = accumulate(L[i].begin(), L[i].end(), 0.0) / L[i].size(), m0 = accumulate(L[i - 1].begin(), L[i - 1].end(), 0.0) / L[i - 1].size();
+        ps += d * 0.5 * (m1 + m0);
+    }
+    FILE *mf = fopen((opt.prefix + ".ml.tsv").c_str(), "w");
+    fprintf(mf, "clock\thyper_rate\tpowers\talpha\tgens_per_power\tseed\tstepping_stone\tpath_sampling\n%s\t%g\t%d\t%g\t%ld\t%llu\t%.6f\t%.6f\n",
+            cn[clk], hyperRate, KS + 1, opt.ssAlpha, opt.ssGens, (unsigned long long)opt.seed, ss, ps);
+    fclose(mf);
+    printf("ML stepping-stone %.6f path %.6f (%.0f s)\n", ss, ps, chrono::duration<double>(chrono::steady_clock::now() - t0).count());
+    summary();
+}
+
 static void usage() {
-    cerr << "usage: ffbd run INPUT --prefix P --seed S --gens G [--print N] [--tree-print N] [--checkpoint N] [--burnin N] [--mode fast|control] [--no-data] [--resume] [--check|--check-every-step] [--rb-sa-move] [--log-rates] [--dump FILE --dump-every N]\n";
+    cerr << "usage: ffbd run INPUT --prefix P --seed S --gens G [--print N] [--tree-print N] [--checkpoint N] [--burnin N] [--mode fast|control] [--no-data] [--resume] [--check|--check-every-step] [--rb-sa-move] [--log-rates] [--dump FILE --dump-every N]\n"
+            "       [--clock exp|ln|gam|igr|acln] [--hyper-rate R] [--init-hyper X]\n"
+            "       marginal likelihood: --ss K --ss-gens G [--ss-burn B] [--ss-every E] [--ss-alpha 0.3] [--burnin N]   writes PREFIX.pp, PREFIX.ml.tsv\n";
     exit(2);
 }
 
@@ -973,8 +1099,12 @@ int main(int argc, char **argv) {
         else if (a == "--resume") o.resume = true; else if (a == "--check") o.check = true; else if (a == "--check-every-step") { o.check = true; o.checkPerStep = true; }
         else if (a == "--rb-sa-move") o.rbSA = true; else if (a == "--log-rates") o.logRates = true; else if (a == "--log-fossils") o.logFossils = true; else if (a == "--fix-fbd") o.fixFbd = true;
         else if (a == "--no-moves") o.noMoves = val(); else if (a == "--dump") o.dumpFile = val(); else if (a == "--dump-every") o.dumpEvery = stol(val());
+        else if (a == "--clock") o.clock = val(); else if (a == "--hyper-rate") o.hyperRate = stod(val()); else if (a == "--init-hyper") o.initHyper = stod(val());
+        else if (a == "--ss") o.ssStones = stoi(val()); else if (a == "--ss-alpha") o.ssAlpha = stod(val()); else if (a == "--ss-gens") o.ssGens = stol(val());
+        else if (a == "--ss-burn") o.ssBurn = stol(val()); else if (a == "--ss-every") o.ssEvery = stol(val());
         else usage();
     }
-    Chain c(o); c.read(o.input); c.init(); c.run();
+    Chain c(o); c.read(o.input); c.init();
+    if (o.ssStones > 0) { if (o.ssGens <= 0 || o.ssEvery <= 0) usage(); c.runSS(); } else c.run();
     return 0;
 }
