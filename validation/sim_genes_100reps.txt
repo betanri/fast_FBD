@@ -1,0 +1,17 @@
+replicates with all four arms: 100; nodes per arm: 6911
+arm         nodes  cov95 median rel err median |err| Myr mean |err| Myr median width Myr
+exact        6911  0.931          12.0%             3.13           4.41            21.23   true branch lengths
+few          6911  0.895          19.6%             3.55           4.90            22.11   23 genes, bootstrap SE
+few_rule     6911  0.894          19.6%             3.55           4.90            22.03   23 genes, SE rule
+many_rule    6911  0.907          17.1%             3.39           4.77            21.87   1,000 genes, SE rule
+
+by true node age (Ma): coverage / median relative error / median absolute error (Myr)
+arm                         0-5                 5-10                10-20                20-40                40-60               60-100
+exact            0.92/+56%/1.24       0.93/+21%/2.68       0.93/+14%/3.71        0.94/+8%/4.63        0.93/+4%/5.58        0.97/+1%/5.03
+few              0.83/+92%/1.77       0.91/+35%/2.97       0.91/+22%/4.20       0.91/+11%/5.07        0.91/+6%/5.87        0.96/+2%/5.28
+few_rule         0.82/+93%/1.76       0.91/+35%/2.95       0.91/+22%/4.23       0.91/+11%/5.09        0.92/+6%/5.91        0.96/+2%/5.27
+many_rule        0.87/+73%/1.51       0.91/+30%/2.77       0.91/+20%/4.09       0.92/+10%/4.96        0.91/+6%/5.89        0.95/+2%/5.40
+
+paired nodes: many_rule closer to the truth than few on 4333 of 6911 (62.7%)
+
+[exited with code 0]
