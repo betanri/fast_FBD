@@ -21,7 +21,7 @@ Status as of 12 November 2026. "RevBayes" means RevBayes 1.3.2 and "MrBayes" mea
 | 3a | ffbd, MrBayes and RevBayes on the same prior | No data | ffbd and MrBayes agree; RevBayes differs |
 | 3b | ffbd and RevBayes with one RevBayes move off | No data | Agree |
 | 4a | Fast FBD against RevBayes full-DNA FBD | DNA vs phylogram | Agree, within DNA chain noise |
-| 4b | Fast FBD against MrBayes full-DNA FBD | DNA vs phylogram | Running |
+| 4b | Fast FBD against MrBayes full-DNA FBD | DNA vs phylogram | Gobiaria agrees; on Protacanthopterygii MrBayes's different clock gives younger ages than both RevBayes DNA and ffbd |
 | 4c | Simulation study, 100 trees of 30 to 120 tips | Phylogram from simulated DNA | Node and fossil ages near 95% coverage |
 | 4d | Catfishes against an earlier full-DNA analysis | DNA vs phylogram | Close, not identical |
 | 4e | Controlled test: which phylogram | DNA vs several phylograms | 23-gene phylogram = 23-gene DNA; more genes give younger ages |
@@ -135,9 +135,36 @@ The differences are no larger than those between the DNA chains themselves.
 
 Full-DNA node-age ESS per chain is low (median 19 for A06 and 35 for A12 on the first chains), which is why six chains were pooled.
 
-### 4b. Fast FBD against MrBayes full-DNA FBD (running)
+### 4b. Fast FBD against MrBayes full-DNA FBD (Gobiaria agrees; Protacanthopterygii shows clock sensitivity)
 
-*Data: DNA (MrBayes) against a phylogram (`ffbd`).* An independent DNA reference. MrBayes on the same 23-gene alignment, GTR+G4, fixed living-species tree (partial constraints), the same clade constraints, fossil windows, sampling fraction and root prior. MrBayes has no exponential-per-branch clock, so the independent gamma rates (IGR) clock is used, and its FBD priors are set on its own parameters (net diversification, turnover, sampling proportion). A no-data run with the same priors is also made, to show how much of each age comes from the DNA. Two DNA chains and two no-data chains per clade, 50 million generations each. The A12 chains and all no-data chains have finished; the A06 DNA chains are running.
+*Data: DNA (MrBayes) against a phylogram (`ffbd`), with RevBayes DNA (test 4a) alongside.* `scripts/make_mb_dna.py` sets up MrBayes 3.2.7 on the same 23-gene alignment (16,107 sites, GTR+G4), the fixed living-species tree (partial constraints), the same clade constraints, fossil windows, sampling fraction and root prior. Two settings differ because MrBayes requires it:
+
+- **Clock.** MrBayes has no exponential-per-branch clock, so the independent gamma rates (IGR) clock is used.
+- **FBD priors.** These are set on MrBayes's own parameters (net diversification, turnover, sampling proportion).
+
+A no-data run with the same priors shows how much of each age comes from the DNA. There are two DNA chains and two no-data chains per clade, 50 million generations each, sampled every 5,000, with the first 10% dropped. MrBayes trees are in substitutions, so each node age is the node height divided by that sample's clock rate. Scoring: `scripts/compare_mbdna.py` (`validation/mrbayes_dna_A06_A12.txt`; per node and program: `validation/plotdata_mbdna_A06.tsv`, `plotdata_mbdna_A12.tsv`).
+
+| Comparison (node-age medians) | A06 median % (largest), mean shift | A12 median % (largest), mean shift |
+|---|---|---|
+| Noise: MrBayes DNA chain 1 vs chain 2 | 0.5% (1.7%), -0.1 Myr | 4.1% (17%), +1.3 Myr |
+| Noise: RevBayes DNA chains 1-3 vs 4-6 | 1.4% (10.6%), -0.9 Myr | 3.3% (13.7%), +1.4 Myr |
+| MrBayes DNA vs RevBayes DNA | 3.1% (21%), -0.2 Myr | 20% (42%), -10.3 Myr |
+| `ffbd` 23-gene phylogram vs MrBayes DNA | 2.8% (25%), +0.6 Myr; 23 of 23 inside the MrBayes 95% interval | 28% (77%), +10.9 Myr; 14 of 21 inside |
+| `ffbd` 23-gene phylogram vs RevBayes DNA | 1.0% (4.6%), +0.5 Myr | 1.5% (3.4%), +0.7 Myr |
+| MrBayes no data vs MrBayes DNA | 8% | 54% |
+| Root age (Ma): RevBayes DNA / MrBayes DNA / `ffbd` | 75.2 / 74.0 / 75.2 | 138.9 / 138.8 / 139.0 |
+
+**Gobiaria (A06).** All three agree, within about twice the chain noise.
+
+**Protacanthopterygii (A12).** The two DNA programs differ beyond their chain noise.
+
+- MrBayes puts the inner nodes 5 to 24 Myr younger. For example, one 11-tip node is 91 Ma in RevBayes and 68 Ma in MrBayes (95% interval 53 to 86).
+- MrBayes intervals are about twice as wide.
+- The root, held by its prior, agrees.
+- `ffbd` stays within 1.5% of RevBayes, whose clock and priors it shares.
+- The DNA moves the MrBayes ages far from its no-data run (54% at the median), so the difference comes from how the DNA is read under each clock, not from the priors alone.
+
+**Reading.** Test 4b does not single out the shortcut: given the same model, the shortcut reproduces full-DNA FBD (tests 4a and 4e). It shows that the clock model can change node ages more than the shortcut does.
 
 ### 4c. Simulation study at realistic size
 
