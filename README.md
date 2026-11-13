@@ -258,16 +258,22 @@ The real test clades are Gobiaria (24 living species, 10 fossils) and Protacanth
 
 - **5a. The genes matter.** The 23-gene phylogram reproduces the 23-gene DNA analysis (1.0 and 1.5% at the median). Phylograms from all genes make nodes 2.5 to 3.8 Myr younger on average, still inside the DNA 95% intervals. How the standard errors were computed makes no difference.
 - **5b. The clock can matter.** On Gobiaria, MrBayes agrees with both RevBayes and `ffbd` (about 3%). On Protacanthopterygii, the two DNA programs disagree: MrBayes puts the inner nodes about 10 Myr younger, with intervals twice as wide, while `ffbd` stays with RevBayes, whose clock it shares.
-- **5c. Results pending** (runs in progress, 13 November 2026). The best clock in each column will be marked; differences above about 5 log units count as strong evidence.
+- **5c. Gamma or lognormal, not exponential.** The table gives each clock's log marginal likelihood minus that of the best clock in its column (0 = best; more negative = worse fit; a gap above about 5 log units is strong evidence). DNA columns use ages fixed at the DNA estimates, mean of 2 replicates.
 
     | Clock | DNA, Gobiaria | DNA, Protacanthopterygii | Phylogram, 1,184 species |
     |---|---|---|---|
-    | Strict | pending | pending | not in `ffbd` |
-    | Exponential | pending | pending | pending |
-    | Lognormal | pending | pending | pending |
-    | Gamma | pending | pending | pending |
-    | IGR | pending | pending | pending |
-    | Autocorrelated lognormal | pending | pending | pending |
+    | Gamma | -1.4 | -1.6 | **0** (two seeds: 5,746 and 5,761) |
+    | Lognormal | **0** | **0** | -5.3 |
+    | Autocorrelated lognormal | -14.9 | -2.7 | -42 |
+    | Exponential | -8.7 | -12.2 | -147 |
+    | IGR | -27.3 | -35.5 | -464 |
+    | Strict | -740 | -523 | not in `ffbd` |
+
+    - **The top two.** Gamma and lognormal lead in every column, within about 5 log units of each other, which is about the gap between the two gamma seeds. The data cannot tell them apart.
+    - **The rest.** Exponential, the clock used in tests 1 to 5b, is clearly worse everywhere, decisively on the large phylogram. IGR, the MrBayes clock of test 5b, fits worst of the relaxed clocks. A strict clock is far behind.
+    - **Choice.** The final dates use gamma, with lognormal as a check.
+    - **Run time.** Each phylogram fit took 2.5 to 3.8 hours on one core. A DNA fit of a single clock on 22 to 24 species took 1.5 to 10 hours on 8 cores in RevBayes.
+    - **Cross-check.** With node ages fixed at the MrBayes estimates, or estimated under fossil minimum ages, the relaxed clocks again beat exponential and strict. There the autocorrelated clock leads for Protacanthopterygii, with lognormal within 2.5 log units. The remaining free-age runs will be added when done.
 - **5d. Rho matters less.** Raising rho from 3.25 to 50% makes crown ages younger: under 1% at the root (held by its prior) and up to 8% on younger crowns. At rho = 10%, no crown moves more than 2%.
 - **5e. More genes are more accurate, modestly.** With 1,000 genes, node ages are closer to the truth on 63% of nodes. The median error drops from 3.55 to 3.39 Myr (3.13 with perfect branch lengths), and 95% coverage rises from 89.5 to 90.7% (93.1% with perfect branch lengths). The gain is largest on nodes under 5 Ma. A 23-gene phylogram gives the same answer as 23-gene DNA (tests 4a and 5a), so this compares full-DNA FBD on the genes it can afford with `ffbd` on genome-scale data.
 
@@ -317,9 +323,9 @@ Full-DNA FBD is slow, and that forces two compromises in practice. `ffbd` remove
 **2. The clock chosen by fit, not by habit.**
 
 - **Full-DNA FBD in practice.** RevBayes and MrBayes offer several clocks and stepping-stone sampling, but on DNA fitting them is practical only for small clades. Here, one RevBayes stepping-stone run for one clock on 22 to 24 species and 23 genes took 1.5 to 10 hours on 8 cores. Repeating that for every clock on 1,184 species and 1,588 fossils is out of reach, so studies pick one clock and rarely test it.
-- **`ffbd`** runs the whole pipeline on the phylogram of the tree actually being dated, one core per clock: it fits five clocks by marginal likelihood, keeps the best, and dates with it.
+- **`ffbd`** runs the whole pipeline on the phylogram of the tree actually being dated, one core per clock (2.5 to 3.8 hours each on 1,184 species and 1,588 fossils): it fits five clocks by marginal likelihood, keeps the best, and dates with it.
 - **What test 5b shows.** The clock matters. On the same DNA, a different clock moved some dates by about 10 million years.
-- **Not yet shown.** Which clock fits these data best (test 5c, running).
+- **What test 5c shows.** Exponential, which most FBD analyses would simply have used here, fits clearly worse than gamma or lognormal on every data set: by 9 to 22 log units on the DNA of the two small clades, and by about 147 on the 1,184-species phylogram. Each phylogram fit took 2.5 to 3.8 hours on one core.
 
 ### Reproducing the tests
 
@@ -335,7 +341,7 @@ Full-DNA FBD is slow, and that forces two compromises in practice. `ffbd` remove
 | 4b | `sim_study.py simulate`, `sim_study_summary.py` | `sim_study_100reps.txt`, `simulation_coverage_by_age.png` |
 | 5a | `ctrl_compare.py` | `phylogram_vs_dna_controlled.txt` |
 | 5b | `make_mb_dna.py`, `compare_mbdna.py` | `mrbayes_dna_A06_A12.txt` |
-| 5c | `clock_ss.py` (DNA, RevBayes); `ffbd --clock C --ss K` (phylogram); `clock_density_check.py` | `clock_checks.txt`; results pending |
+| 5c | `clock_ss.py` (DNA, RevBayes); `ffbd --clock C --ss K` (phylogram); `clock_density_check.py` | `clock_checks.txt`, `clock_fit_results.txt` |
 | 5e | `sim_genes.py`, `sim_genes_summary.py` | `sim_genes_100reps.txt` |
 | 6b | `examples/example_crown_stem.txt` | `crown_stem_test_11seeds.txt`, `regression_previous_release.txt` |
 | 6d | `ffbd_convert.py --auto-start` | `auto_start_check.txt` |
