@@ -302,6 +302,7 @@ void Chain::init() {
     if (!hasClock) { K = 0; J = 0; bpar.clear(); bch.clear(); tb.clear(); obs.clear(); se.clear(); lnSe.clear(); }
     // clock model: the input's rate_prior (exp or ucln) unless --clock is given
     clk = ucln ? 1 : 0;
+    if (opt.clock.empty() && hasClock && !ucln) fprintf(stderr, "WARNING: no --clock given; using exp. Fit the clocks first and set the best one (README, Choosing the clock).\n");
     if (!opt.clock.empty()) {
         const char *cn[] = {"exp", "ln", "gam", "igr", "acln"}; clk = -1;
         for (int i = 0; i < 5; i++) if (opt.clock == cn[i]) clk = i;

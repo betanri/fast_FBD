@@ -300,7 +300,7 @@ The clock is chosen by marginal likelihood, estimated by stepping-stone sampling
 | Clock | Rate prior | Hyperprior |
 |---|---|---|
 | Strict | one rate m | |
-| Exponential (`ffbd` default) | rate ~ Exponential(mean m) | |
+| Exponential (used in tests 1 to 5b) | rate ~ Exponential(mean m) | |
 | Lognormal | lognormal, mean m, log-scale sd sigma | sigma ~ Exp(mean 0.587) |
 | Gamma | Gamma(shape k, mean m) | k ~ Exp(1) |
 | IGR | Gamma(shape t/v, mean m), t = branch duration | v ~ Exp(10) |
@@ -312,7 +312,7 @@ All clocks use m ~ Exp(10). Node ages are set in one of three ways: fixed at the
 
 **Checks of the new code** (`validation/clock_checks.txt`). The gamma, IGR and autocorrelated lognormal clocks and the stepping-stone code are new in `ffbd`.
 
-1. **Regression.** With the default clock, the lognormal input and the no-data mode, the program gives byte-identical log and tree files to the previous version.
+1. **Regression.** With the exponential clock, the lognormal input and the no-data mode, the program gives byte-identical log and tree files to the previous version.
 2. **Caches.** With a full recompute after every proposal (`--check-every-step`), there is no error for any clock, on the small example (300,000 proposals) and on a 1,184-species input (5,000 proposals).
 3. **Densities.** The clock prior matches `scipy.stats` (`scripts/clock_density_check.py`). The largest difference is 7e-15 to 2e-9 on the small example, and 4e-12 to 1e-6 on 2,366 branches (ages read from the log at 10 significant digits).
 4. **Prior recovery.** With no data, the hyperparameter of each clock follows its exponential prior (Kolmogorov-Smirnov p 0.38 to 0.97). The mean rate follows Exp(10) (p 0.69 to 0.98), and every branch rate averages 0.097 to 0.104 (expected 0.1).
