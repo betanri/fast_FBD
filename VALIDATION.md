@@ -32,7 +32,7 @@ Status as of 13 November 2026. This file holds the numbers behind the [README Va
 | | 4c | Catfishes against an earlier full-DNA analysis | DNA vs phylogram | Close, not like for like |
 | 5. What matters more | 5a | Which phylogram: 23 genes, all genes, larger tree | DNA vs phylograms | 23-gene phylogram = 23-gene DNA; more genes give younger ages |
 | | 5b | ffbd against MrBayes full-DNA FBD (IGR clock) | DNA vs phylogram | Gobiaria agrees; Protacanthopterygii is clock-sensitive |
-| | 5c | Clock models by marginal likelihood | DNA | Running |
+| | 5c | Clock models by marginal likelihood, on DNA (RevBayes) and on the phylogram (`ffbd --ss`) | DNA; phylogram | New code checked; fits running |
 | | 5d | Sampling fraction (rho) | Phylogram | Up to 8% younger at rho 50% |
 | 6. Large trees | 6a | Convergence at 1,185 and 2,424 tips | Phylogram | Passed |
 | | 6b | Crown and stem rules | Phylogram | Passed |
@@ -291,18 +291,51 @@ A no-data run with the same priors shows how much of each age comes from the DNA
 
 **Reading.** Given the same model, the shortcut reproduces full-DNA FBD (tests 4a and 5a). This test shows that the clock model can change node ages more than the shortcut does.
 
-### 5c. Clock models by marginal likelihood (running)
+### 5c. Clock models by marginal likelihood (fits running)
 
-*Data: DNA.* `scripts/clock_ss.py` compares six clocks on the A06 and A12 23-gene alignments (GTR+G4, fixed living-species tree):
+The clock is chosen by marginal likelihood, estimated by stepping-stone sampling (Xie et al. 2011), with path sampling reported alongside. Two fits answer slightly different questions: which clock best explains the DNA of small clades, and which best explains the phylogram that is actually dated.
 
-- strict;
-- exponential (the `ffbd` default);
-- uncorrelated lognormal (also available in `ffbd`);
-- gamma;
-- IGR (as in MrBayes);
-- autocorrelated lognormal.
+**DNA fit (RevBayes).** *Data: DNA.* `scripts/clock_ss.py` writes a RevBayes 1.3.2 power-posterior analysis for each clock on the A06 and A12 23-gene alignments (GTR+G4, fixed living-species tree, 63 powers).
 
-Marginal likelihoods are estimated by stepping-stone and path sampling in RevBayes (Xie et al. 2011), with 63 power steps. Node ages are set in one of three ways: fixed at the RevBayes DNA medians, fixed at the MrBayes DNA medians, or estimated under a birth-death prior with the oldest fossil of each clade as a minimum age. Each setting has two replicates. Results will be added when the runs finish.
+| Clock | Rate prior | Hyperprior |
+|---|---|---|
+| Strict | one rate m | |
+| Exponential (`ffbd` default) | rate ~ Exponential(mean m) | |
+| Lognormal | lognormal, mean m, log-scale sd sigma | sigma ~ Exp(mean 0.587) |
+| Gamma | Gamma(shape k, mean m) | k ~ Exp(1) |
+| IGR | Gamma(shape t/v, mean m), t = branch duration | v ~ Exp(10) |
+| Autocorrelated lognormal | log rate ~ Normal(log parent rate - s^2 t/2, s^2 t); root branches centered on m | s ~ Exp(10) |
+
+All clocks use m ~ Exp(10). Node ages are set in one of three ways: fixed at the RevBayes DNA medians, fixed at the MrBayes DNA medians, or estimated under a birth-death prior with the oldest fossil of each clade as a minimum age. Each setting has two replicates.
+
+**Phylogram fit (`ffbd`).** *Data: phylogram.* `ffbd --clock C --ss 64` on the 1,184-species phylogram with 1,588 fossils (SE rule, rho 3.25%), for the five `ffbd` clocks, with the same priors as above. That is 65 powers, beta = (i/64)^(1/0.3). Each power runs 50 million burn-in proposals and 250 million sampled proposals, after 4 billion tuning proposals at power 1. Two replicates per clock.
+
+**Checks of the new code** (`validation/clock_checks.txt`). The gamma, IGR and autocorrelated lognormal clocks and the stepping-stone code are new in `ffbd`.
+
+1. **Regression.** With the default clock, the lognormal input and the no-data mode, the program gives byte-identical log and tree files to the previous version.
+2. **Caches.** With a full recompute after every proposal (`--check-every-step`), there is no error for any clock, on the small example (300,000 proposals) and on a 1,184-species input (5,000 proposals).
+3. **Densities.** The clock prior matches `scipy.stats` (`scripts/clock_density_check.py`). The largest difference is 7e-15 to 2e-9 on the small example, and 4e-12 to 1e-6 on 2,366 branches (ages read from the log at 10 significant digits).
+4. **Prior recovery.** With no data, the hyperparameter of each clock follows its exponential prior (Kolmogorov-Smirnov p 0.38 to 0.97). The mean rate follows Exp(10) (p 0.69 to 0.98), and every branch rate averages 0.097 to 0.104 (expected 0.1).
+5. **Stepping-stone against brute force.** On the small example, the marginal likelihood was also estimated as the mean likelihood over 500,000 prior draws:
+
+| Clock | Stepping-stone | Brute force |
+|---|---|---|
+| Exponential | 7.387 | 7.393 +- 0.013 |
+| IGR | 7.286 | 7.291 +- 0.010 |
+| Autocorrelated lognormal | 7.468 | 7.466 +- 0.009 |
+
+Path sampling comes out about 0.1 lower, a known discretization bias with few powers, so stepping-stone is the main estimate.
+
+**Results (pending; runs in progress, 13 November 2026).** Log marginal likelihood, stepping-stone (mean of replicates, with their range):
+
+| Clock | DNA, A06 (ages fixed / free) | DNA, A12 (ages fixed / free) | Phylogram, 1,184 species |
+|---|---|---|---|
+| Strict | pending | pending | not in `ffbd` |
+| Exponential | pending | pending | pending |
+| Lognormal | pending | pending | pending |
+| Gamma | pending | pending | pending |
+| IGR | pending | pending | pending |
+| Autocorrelated lognormal | pending | pending | pending |
 
 ### 5d. Sampling fraction (rho)
 
