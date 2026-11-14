@@ -334,12 +334,12 @@ DNA (RevBayes, 23 genes). Node ages are set three ways: fixed at the RevBayes DN
 
 | Clock | A06, ages RevBayes | A06, ages MrBayes | A06, ages free | A12, ages RevBayes | A12, ages MrBayes | A12, ages free |
 |---|---|---|---|---|---|---|
-| Strict | -63,210.4 / -63,211.0 | -63,126.9 | -63,087.7 | -49,031.6 / -49,032.2 | -48,733.1 | -48,772.7 / -48,772.2 |
-| Exponential | -62,479.9 / -62,479.8 | -62,480.8 | -62,572.7 | -48,520.8 / -48,522.0 | -48,519.5 | -48,632.2 |
-| Lognormal | **-62,470.6 / -62,471.7** | **-62,472.2** | running | **-48,510.0 / -48,508.6** | -48,499.9 | running |
-| Gamma | -62,472.8 / -62,472.3 | -62,475.8 | **-62,566.1 / -62,566.3** | -48,510.6 / -48,511.3 | -48,503.2 | running |
-| IGR | -62,499.6 / -62,497.4 | -62,491.7 | running | -48,544.3 / -48,545.2 | -48,515.1 | running |
-| Autocorrelated lognormal | -62,485.8 / -62,486.4 | -62,490.9 | running | -48,512.6 / -48,511.4 | **-48,497.4** | **-48,617.4 / -48,617.5** |
+| Strict | -63,210.4 / -63,211.0 | -63,126.9 | -63,087.7 / -63,087.6 | -49,031.6 / -49,032.2 | -48,733.1 | -48,772.7 / -48,772.2 |
+| Exponential | -62,479.9 / -62,479.8 | -62,480.8 | -62,571.6 / -62,572.7 | -48,520.8 / -48,522.0 | -48,519.5 | -48,632.2 / -48,631.4 |
+| Lognormal | **-62,470.6 / -62,471.7** | **-62,472.2** | -62,564.6 / -62,566.2 | **-48,510.0 / -48,508.6** | -48,499.9 | -48,622.4 / -48,622.9 |
+| Gamma | -62,472.8 / -62,472.3 | -62,475.8 | -62,566.1 / -62,566.3 | -48,510.6 / -48,511.3 | -48,503.2 | -48,624.2 / -48,623.1 |
+| IGR | -62,499.6 / -62,497.4 | -62,491.7 | -62,594.0 / -62,589.0 | -48,544.3 / -48,545.2 | -48,515.1 | -48,642.3 / -48,646.2 |
+| Autocorrelated lognormal | -62,485.8 / -62,486.4 | -62,490.9 | **-62,564.2 / -62,564.1** | -48,512.6 / -48,511.4 | **-48,497.4** | **-48,617.4 / -48,617.5** |
 
 Phylogram (`ffbd --ss`, 1,184 species, 1,588 fossils, seeds 1101 / 1102, run time on one core):
 
@@ -351,13 +351,12 @@ Phylogram (`ffbd --ss`, 1,184 species, 1,588 fossils, seeds 1101 / 1102, run tim
 | Exponential | 5,609.0 / 5,603.1 | 2.5 h |
 | IGR | 5,264.5 / 5,315.0 | 3.8 h |
 
-- **Gamma and lognormal fit best or nearly best everywhere.** They lead with RevBayes ages, on A06 with MrBayes ages, and on the phylogram, and stay within about 6 log units of the best elsewhere. They are within about 5 log units of each other in every column, so the data cannot separate them. The final dates use gamma (best on the phylogram that is dated), with lognormal as a check.
-- **Exponential is clearly worse:** by 9 to 22 log units on the DNA with fixed ages, and by about 147 on the phylogram.
+- **Gamma and lognormal fit best or nearly best everywhere.** They lead with RevBayes ages, on A06 with MrBayes ages, and on the phylogram, and stay within about 6 log units of the best elsewhere (with free ages, lognormal is within 1 of the best on A06 and 5 on A12). They are within about 5 log units of each other in every column, so the data cannot separate them. The final dates use gamma (best on the phylogram that is dated), with lognormal as a check.
+- **Exponential is clearly worse:** by 9 to 22 log units on the DNA with fixed ages, by 8 to 14 with free ages, and by about 147 on the phylogram.
 - **IGR fits poorly,** especially on the large phylogram. This bears on test 5b, where MrBayes had to use IGR.
-- **The autocorrelated clock is mixed:** best for A12 with MrBayes ages and with free ages, but far behind on the phylogram.
-- **Seed agreement.** RevBayes replicates agree within about 2 log units. On the phylogram, the gamma seeds differ by 16 and the IGR seeds by 51, which is small next to the gaps between clocks.
+- **The autocorrelated clock is mixed:** best with free ages on both sets (on A06 tied with lognormal) and for A12 with MrBayes ages, but far behind on the phylogram.
+- **Seed agreement.** RevBayes replicates agree within about 2 log units (IGR with free ages: 4 to 5). On the phylogram, the gamma seeds differ by 16 and the IGR seeds by 51, which is small next to the gaps between clocks.
 - **Path sampling is unusable on the 1,184-species phylogram.** Its estimates vary by tens of thousands between seeds, because the likelihood is very large and negative near power 0, where the trapezoid rule fails. Stepping-stone is stable there, and it is the estimate used.
-- **Still running.** The DNA fits with free node ages for the remaining clocks will be added when done; they are a cross-check.
 
 ### 5d. Sampling fraction (rho)
 
