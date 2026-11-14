@@ -5,6 +5,10 @@
 //   p(lambda, mu, psi, root, rates, m, tree | n, m, labels, constraints, windows).
 // Usage: ffbd_sim OUTFILE SEED REP [root|origin] -> writes a ffbd input (start = truth) and prints the truth line to stdout.
 // Origin mode: one lineage from an origin age ~ Uniform(15, 25); fossil F2 has no clade constraint (it may sit anywhere, including above the root).
+// Rate shifts: ffbd_sim OUTFILE SEED REP root|origin T1,T2,... simulates piecewise-constant rates (interval i = ages [T_{i-1}, T_i), i = 0
+// youngest), with lambda_i, mu_i, psi_i ~ Exp(10) independently; the input gets rate_shifts and per-interval init values, and the truth
+// line gets the per-interval rates appended (lambda_0..K, mu_0..K, psi_0..K). Without shifts the output is unchanged.
+// Optional 6th argument, e.g. lambda,mu: only these rates vary across intervals; the others are one Exp(10) value for all intervals.
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -24,18 +28,30 @@ struct N { int left = -1, right = -1; double age = 0; int kind = 0; }; // kind 0
 static vector<N> nodes; static int nExtant, nFossil;
 static const int MAXE = 4, MAXF = 3;
 static double lam, mu, psi_, rho = 0.5;
+static vector<double> shiftT, lamV, muV, psiV; // piecewise-constant rates (shiftT empty: constant rates lam, mu, psi_)
 static bool abortSim;
 
 static int newNode(int kind, double age, int l = -1, int r = -1) { nodes.push_back({l, r, age, kind}); return (int)nodes.size() - 1; }
 static int sim(double t) {
     if (abortSim) return -1;
-    double rate = lam + mu + psi_;
-    double a = t - EXP(rate);
+    double a, l = lam, m = mu, p = psi_;
+    if (shiftT.empty()) a = t - EXP(l + m + p);
+    else { // waiting time across intervals (memoryless: on reaching a shift, draw again with the younger interval's rates)
+        int i = 0; while (i < (int)shiftT.size() && t >= shiftT[i]) i++;
+        a = t;
+        while (true) {
+            l = lamV[i]; m = muV[i]; p = psiV[i];
+            double lo = i == 0 ? 0.0 : shiftT[i - 1], b = a - EXP(l + m + p);
+            if (b > lo || i == 0) { a = b; break; }
+            a = lo; i--;
+        }
+    }
+    double rate = l + m + p;
     if (a <= 0) { if (U() < rho) { nExtant++; if (nExtant > MAXE) abortSim = true; return newNode(0, 0.0); } return -1; }
     double u = U() * rate;
-    if (u < lam) {
+    if (u < l) {
         int L = sim(a); int R = sim(a); if (L < 0) return R; if (R < 0) return L; return newNode(2, a, L, R);
-    } else if (u < lam + mu) return -1;
+    } else if (u < l + m) return -1;
     // fossil sample
     nFossil++; if (nFossil > MAXF) { abortSim = true; return -1; }
     int fid = newNode(1, a);
@@ -48,6 +64,10 @@ static int sim(double t) {
 int main(int argc, char **argv) {
     string out = argv[1]; eng.seed(stoull(argv[2])); int rep = argc > 3 ? atoi(argv[3]) : 0;
     bool originMode = (argc > 4 && string(argv[4]) == "origin");
+    if (argc > 5) { string t; string a5 = argv[5]; size_t q = 0; while (q < a5.size()) { size_t e = a5.find(',', q); if (e == string::npos) e = a5.size(); shiftT.push_back(stod(a5.substr(q, e - q))); q = e + 1; } }
+    int nI = (int)shiftT.size() + 1;
+    bool varyW[3] = {true, true, true}; // optional 6th argument: which rates vary across intervals (as ffbd shift_rates); the others are shared
+    if (argc > 6) { string a6 = argv[6]; varyW[0] = a6.find("lambda") != string::npos; varyW[1] = a6.find("mu") != string::npos; varyW[2] = a6.find("psi") != string::npos; }
     // fossil windows, label order fixed: F1 in [6,14], F2 in [2,16], F3 in [8,18]; labels: A,B,C,D,F1,F2,F3
     double wMin[3] = {6, 2, 8}, wMax[3] = {14, 16, 18};
     double se = 0.03;
@@ -55,6 +75,7 @@ int main(int argc, char **argv) {
     while (true) {
         tries++;
         lam = EXP(10); mu = EXP(10); psi_ = EXP(10);
+        if (!shiftT.empty()) { lamV.assign(nI, 0); muV.assign(nI, 0); psiV.assign(nI, 0); lamV[0] = lam; muV[0] = mu; psiV[0] = psi_; for (int i = 1; i < nI; i++) { lamV[i] = varyW[0] ? EXP(10) : lam; muV[i] = varyW[1] ? EXP(10) : mu; psiV[i] = varyW[2] ? EXP(10) : psi_; } }
         double rootAge = originMode ? 15.0 + 10.0 * U() : NORM(20, 2); if (rootAge < 1) continue;
         nodes.clear(); nExtant = nFossil = 0; abortSim = false;
         int rootId;
@@ -123,7 +144,14 @@ int main(int argc, char **argv) {
         FILE *f = fopen(out.c_str(), "w");
         if (originMode) fprintf(f, "FFBD 1\ncond origin\nmode fast\nn 4\nm 3\nrho %.17g\nroot_prior none\norigin_prior uniform 15 25\n", rho);
         else fprintf(f, "FFBD 1\ncond root\nmode fast\nn 4\nm 3\nrho %.17g\nroot_prior normal 20 2\norigin_prior none\n", rho);
-        fprintf(f, "init_lambda %.17g\ninit_mu %.17g\ninit_psi %.17g\ninit_cond_age %.17g\ninit_clock %.17g\n", lam, mu, psi_, rootAge, m);
+        if (shiftT.empty()) fprintf(f, "init_lambda %.17g\ninit_mu %.17g\ninit_psi %.17g\ninit_cond_age %.17g\ninit_clock %.17g\n", lam, mu, psi_, rootAge, m);
+        else {
+            fprintf(f, "rate_shifts"); for (double x : shiftT) fprintf(f, " %.17g", x); fprintf(f, "\n");
+            if (argc > 6) fprintf(f, "shift_rates %s\n", argv[6]);
+            const vector<double> *V[3] = {&lamV, &muV, &psiV}; const char *nm3[3] = {"init_lambda", "init_mu", "init_psi"};
+            for (int w = 0; w < 3; w++) { fprintf(f, "%s", nm3[w]); for (double x : *V[w]) fprintf(f, " %.17g", x); fprintf(f, "\n"); }
+            fprintf(f, "init_cond_age %.17g\ninit_clock %.17g\n", rootAge, m);
+        }
         const char *nm[7] = {"A", "B", "C", "D", "FOSSIL_1", "FOSSIL_2", "FOSSIL_3"};
         fprintf(f, "tips 7\n");
         for (int i = 0; i < 4; i++) fprintf(f, "%d %s E 0 0\n", i, nm[i]);
@@ -143,7 +171,9 @@ int main(int argc, char **argv) {
         double meanR = 0; for (double r : rates) meanR += r / 6.0;
         printf("TRUTH\t%d\t%ld\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g", rep, tries, lam, mu, psi_, rootAge, m, tn1, tn2, tn3, nodes[labelToNode[4]].age, nodes[labelToNode[5]].age, nodes[labelToNode[6]].age, meanR);
         int nsa = 0; for (int i = 0; i < nn; i++) if (nodes[i].kind == 3) nsa++;
-        printf("\t%d\t%.10g\n", nsa, nodes[rootId].age);
+        printf("\t%d\t%.10g", nsa, nodes[rootId].age);
+        if (!shiftT.empty()) { for (double x : lamV) printf("\t%.10g", x); for (double x : muV) printf("\t%.10g", x); for (double x : psiV) printf("\t%.10g", x); }
+        printf("\n");
         return 0;
     }
 }

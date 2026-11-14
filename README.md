@@ -44,6 +44,8 @@ cd fast_FBD
 make
 ```
 
+To check the build, run `make test` (about a minute). It runs every clock on both examples with a full recomputation of the posterior after every proposal, a short stepping-stone run, and the bears example, and reports `all tests passed`.
+
 ## Quick start
 
 The quick start uses real data: the 8 living and 14 fossil bears of the RevBayes FBD tutorial (fossils after Heath et al. 2014; branch lengths and standard errors from the tutorial's cytochrome b alignment), in `examples/bears_input.txt`. Every step takes seconds. A tiny simulated set (4 living species, 3 fossils) used by the tests is in `examples/example_input.txt`.
@@ -146,7 +148,7 @@ A clade constraint says a fossil belongs to a group, and that includes the group
 
 ## The model
 
-- Constant-rate fossilized birth-death process with sampled ancestors, conditioned on the root age. The density matches RevBayes 1.3.2 `dnBDSTP` inside `dnConstrainedTopology`.
+- Fossilized birth-death process with sampled ancestors, conditioned on the root age (or the origin). Rates are constant by default, or piecewise-constant between fixed shift times (skyline FBD, below). The density matches RevBayes 1.3.2 `dnBDSTP` (with `timeline` when there are shifts) inside `dnConstrainedTopology`.
 - Fossil ages are uniform within their windows.
 - Clock: one rate per branch of the living-species tree, with mean rate m ~ Exp(10). Five clock priors (`--clock`):
     - `exp`: each rate ~ Exponential(mean m).
@@ -156,6 +158,22 @@ A clade constraint says a fossil belongs to a group, and that includes the group
     - `acln`: autocorrelated lognormal; each branch's rate is centered on its parent branch's rate, with variance growing with branch duration.
 - The clock with the best fit can be chosen by marginal likelihood (`--ss`; test 5c).
 - Data: for each branch, observed length ~ Normal(rate x time, standard error). The two branches at the root share one observation.
+
+### Rate shifts (skyline FBD)
+
+Speciation, extinction and fossil sampling can change at fixed times, as in skyline FBD in BEAST2, RevBayes `dnBDSTP(timeline=...)` and MrBayes 3.2. Add one line to the input (or use `--rate-shifts` on the command line, which overrides it):
+
+```
+rate_shifts 66 201.3
+```
+
+- K times in Ma, strictly increasing, give K+1 intervals; interval 1 is the youngest. Each interval has its own lambda, mu and psi.
+- `shift_rates lambda,mu` lets only those rates change; a rate left out (here psi) is shared by all intervals.
+- Each free rate ~ Exponential(rate 10), as in the constant model, with no smoothing between intervals: an interval with few nodes or fossils stays close to the prior.
+- Shift times are fixed, not estimated. rho applies at the present only; there are no mass extinctions or extra sampling at the shifts.
+- The log gets one column per interval: `speciation_rate[1]`, `extinction_rate[1]`, `psi[1]`, ... (youngest first).
+- Without shifts the output is byte-identical to the constant-rate model. With 2 shifts a run takes about 60% longer per proposal.
+- Validation: test 1b of VALIDATION.md (density equals RevBayes on 1,012 states, cache check, prior recovery, simulation-based calibration).
 
 ## Validation
 
@@ -370,7 +388,7 @@ Full-DNA FBD is slow, and that forces two compromises in practice. `ffbd` remove
 
 - The topology of living species is fixed within a run; date several trees to cover topological uncertainty.
 - Fossils must fall inside a clade constraint below the root in root-conditioned runs.
-- Rates are constant through time (no shifts or mass extinctions).
+- Rate shift times are fixed by the user, not estimated; there are no mass extinctions or extra sampling at the shifts.
 - The result depends on the quality of the branch lengths and their standard errors.
 
 ## Citation and license

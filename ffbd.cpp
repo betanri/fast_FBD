@@ -6,6 +6,10 @@
 // - Each fossil age is uniform in its window (density 1/(max-min+2e-4), the same constant as the Rev window terms).
 // - Mode "fast": rate_i ~ clock prior (default Exp(mean m); see lnRateTerm), m ~ Exp(10), b_obs_j ~ Normal(|sum rate_i*time_i|, se_j) (edges of the unrooted tree).
 // - Mode "control": no rates, no data.
+// - Optional rate shifts (input keyword rate_shifts T1 T2 ..., or --rate-shifts T1,T2,...): piecewise-constant lambda_i, mu_i, psi_i
+//   in K+1 intervals (SkyFBD; RevBayes dnBDSTP(..., timeline=v(T1,...))). Each free rate ~ Exp(10). shift_rates (or --shift-rates)
+//   lists which of lambda, mu, psi vary across intervals (default all three); the others are one value shared by all intervals.
+//   Without shifts the program is the constant-rate model above, with byte-identical output.
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -62,6 +66,53 @@ struct FBD {
         double r = (1.0 + B - e * (1.0 - B)) / (1.0 + B + e * (1.0 - B));
         return log((lam + mu + psi - A * r) / (2.0 * lam));
     }
+    // interval of a piecewise-constant process whose young end has extinction probability E0 (E0 = 1 - rho at the present)
+    void setE(double l, double m, double p, double E0) {
+        lam = l; mu = m; psi = p; rho = 1.0 - E0;
+        A = sqrt((l - m - p) * (l - m - p) + 4 * l * p);
+        B = ((1.0 - 2.0 * E0) * l + m + p) / A;
+        lnLam = log(l); lnPsi = log(p);
+    }
+    inline double E(double t) const {
+        double e = exp(-A * t);
+        double r = (1.0 + B - e * (1.0 - B)) / (1.0 + B + e * (1.0 - B));
+        return (lam + mu + psi - A * r) / (2.0 * lam);
+    }
+};
+
+// ---- piecewise-constant ("skyline") FBD, r = 0, rho at the present only, no mass extinction or event sampling at the shifts.
+// Shift ages T[0] < ... < T[K-1] (Myr before present) give K+1 intervals; interval i covers ages [T[i-1], T[i]) with T[-1] = 0,
+// T[K] = infinity, and has its own lambda_i, mu_i, psi_i (i = 0 is the youngest). E (probability that a lineage leaves no sampled
+// descendant) and D (probability density of the observed subtree along a lineage) are continuous at the shifts. Within interval i,
+// E and D/D(T[i-1]) are the constant-rate solutions (FBD::E, FBD::lnD) in time since T[i-1], started from E(T[i-1]) (Stadler 2010 PNAS
+// Theorem 1; Gavryushkina et al. 2014 PLoS Comp Biol; RevBayes dnBDSTP with a timeline). So ln D(t) = C[i] + I[i].lnD(t - T[i-1]),
+// with C[i] = ln D(T[i-1]) = sum over j < i of ln q_j(T[j] - T[j-1]); every lineage crossing a shift picks up the q_j factors through C.
+// With K = 0 every function reduces to the constant-rate FBD above, evaluated by the same floating-point operations.
+struct SkyFBD {
+    int K = 0; vector<double> T; vector<FBD> I; vector<double> C; double rho = 0;
+    bool off = false; // test only (--no-fbd, needs shifts): FBD density switched off, so the rates sample their Exp(10) prior
+    void set(const vector<double> &l, const vector<double> &m, const vector<double> &p, double r) {
+        rho = r; I.resize(K + 1); C.resize(K + 1);
+        I[0].set(l[0], m[0], p[0], r); C[0] = 0.0;
+        for (int i = 1; i <= K; i++) {
+            double dt = T[i - 1] - (i >= 2 ? T[i - 2] : 0.0);
+            I[i].setE(l[i], m[i], p[i], I[i - 1].E(dt));
+            C[i] = C[i - 1] + I[i - 1].lnD(dt);
+        }
+    }
+    inline int at(double t) const { int i = 0; while (i < K && t >= T[i]) i++; return i; }
+    inline double lnD(double t) const {
+        if (K == 0) return I[0].lnD(t);
+        if (off) return 0.0;
+        int i = at(t); return i == 0 ? I[0].lnD(t) : C[i] + I[i].lnD(t - T[i - 1]);
+    }
+    inline double lnE(double t) const {
+        if (K == 0) return I[0].lnE(t);
+        if (off) return 0.0;
+        int i = at(t); return I[i].lnE(i == 0 ? t : t - T[i - 1]);
+    }
+    inline double lnLam(double t) const { return K == 0 ? I[0].lnLam : off ? 0.0 : I[at(t)].lnLam; }
+    inline double lnPsi(double t) const { return K == 0 ? I[0].lnPsi : off ? 0.0 : I[at(t)].lnPsi; }
 };
 
 static inline double sq(double x) { return x * x; }
@@ -106,10 +157,11 @@ struct Options {
     string input, prefix = "ffbd_run";
     uint64_t seed = 1; long gens = 1000000, printEvery = 1000, treeEvery = 10000, ckpEvery = 0, burnin = 0;
     string mode = ""; // "", "fast", "control"
-    bool resume = false, check = false, noData = false, rbSA = false, logRates = false, logFossils = false, fixFbd = false; bool checkPerStep = false;
+    bool resume = false, check = false, noData = false, rbSA = false, logRates = false, logFossils = false, fixFbd = false; bool checkPerStep = false; bool noFbd = false;
     string dumpFile = ""; long dumpEvery = 0; string noMoves = "";
     string clock = ""; double hyperRate = -1, initHyper = -1;                     // --clock exp|ln|gam|igr|acln, --hyper-rate, --init-hyper
     int ssStones = 0; double ssAlpha = 0.3; long ssGens = 0, ssBurn = 0, ssEvery = 1000; // --ss K: stepping-stone with K+1 powers (Xie et al. 2011)
+    string rateShifts = "", shiftRates = "";                                       // --rate-shifts T1,T2,... and --shift-rates lambda,mu,psi (override the input)
 };
 
 class Chain {
@@ -140,18 +192,29 @@ public:
     inline bool inCrown(int f) const { return (crownOf[f] < 0 || belowNode(f, crownOf[f])) && (stemOf[f] < 0 || !belowNode(f, stemOf[f])); }
 
     // parameters
-    double lam = 0, mu = 0, psi = 0, m = 0; vector<double> rates; double sumRates = 0;
+    double m = 0; vector<double> rates; double sumRates = 0;
+    // FBD rates: lamV[i], muV[i], psiV[i] for interval i (0 = youngest); nShift = 0 is the constant-rate model.
+    // vary[w] (w = 0 lambda, 1 mu, 2 psi): false = one value shared by all intervals (all entries equal, one free parameter).
+    int nShift = 0, nInt = 1; vector<double> shiftT; bool vary[3] = {true, true, true};
+    vector<double> lamV{0.0}, muV{0.0}, psiV{0.0}; int lastInt = 0;
+    inline int nFree(int w) const { return vary[w] ? nInt : 1; }
+    inline int nUD() const { return (vary[0] || vary[1]) ? nInt : 1; }
+    vector<double> &rateVec(int w) { return w == 0 ? lamV : w == 1 ? muV : psiV; }
+    const vector<double> &rateVec(int w) const { return w == 0 ? lamV : w == 1 ? muV : psiV; }
     bool ucln = false; double sigma = 0.5; vector<double> calLo, calHi; // UCLN clock (catfish) and uniform calibrations on extant node ages
     int clk = 0; double hyperRate = 3.0; bool timeDep = false;          // clock model (see lnRateTerm); timeDep: igr, acln (prior depends on branch time)
     vector<int> pb; vector<array<int, 2>> chB; vector<int> nCh;          // parent branch and child branches of each branch (extant tree)
     double beta = 1.0;                                                   // power on the data term (stepping-stone / path sampling)
-    FBD P;
+    SkyFBD P, Pn; // current FBD quantities and a scratch copy for rate proposals
 
     // cached log densities
     double lnFBD = 0, lnRoot = 0, lnHyper = 0, lnRatePrior = 0, lnData = 0;
     double lnCalConst = 0.0; vector<double> initRates;
     long iter = 0; long burnDone = 0; RNG rng;
     Tune tLam, tMu, tPsi, tUD, tRootS, tRootCo, tOrigin, tRate, tMean, tJoint, tVec, tSigma;
+    vector<Tune> tSky; // tunings of the lambda, mu, psi and up-down moves of intervals 1..nShift (index 4 * i + w); interval 0 uses tLam, tMu, tPsi, tUD
+    Tune &tuneFor(int w, int i) { if (i == 0) return w == 0 ? tLam : w == 1 ? tMu : w == 2 ? tPsi : tUD; return tSky[4 * i + w]; }
+    const Tune &tuneFor(int w, int i) const { if (i == 0) return w == 0 ? tLam : w == 1 ? tMu : w == 2 ? tPsi : tUD; return tSky[4 * i + w]; }
     array<long, N_MOVES> att{}, acc{};
     vector<double> weights; vector<double> cum; double totalW = 0;
     Options opt;
@@ -161,8 +224,12 @@ public:
 
     void read(const string &path);
     void init(); void setupMoves();
-    double lnFBDFull(const FBD &p) const; void recomputeAll();
-    double lnHyperFull() const { return (log(10.0) - 10.0 * lam) + (log(10.0) - 10.0 * mu) + (log(10.0) - 10.0 * psi); }
+    double lnFBDFull(const SkyFBD &p) const; void recomputeAll();
+    double lnHyperFull() const {
+        if (nShift == 0) return (log(10.0) - 10.0 * lamV[0]) + (log(10.0) - 10.0 * muV[0]) + (log(10.0) - 10.0 * psiV[0]);
+        double s = 0; for (int w = 0; w < 3; w++) for (int i = 0; i < nFree(w); i++) s += log(10.0) - 10.0 * rateVec(w)[i];   // each free rate ~ Exp(10)
+        return s;
+    }
     inline double top(int v) const { return par[v] == -1 ? origin : age[par[v]]; }
     inline int sib(int v) const { int p = par[v]; return c0[p] == v ? c1[p] : c0[p]; }
     inline bool isSAParent(int v) const { return v >= N && ((c0[v] < N && sa[c0[v]]) || (c1[v] < N && sa[c1[v]])); }
@@ -235,7 +302,9 @@ void Chain::read(const string &path) {
     string key;
     // scalar header up to the "tips" keyword
     string rootp, origp; vector<double> rootv, origv;
-    double initLam = 0, initMu = 0, initPsi = 0, initCond = 0, initClock = 0;
+    double initCond = 0, initClock = 0; vector<double> initLam{0.0}, initMu{0.0}, initPsi{0.0};
+    auto restNums = [&](const string &k) { string line; getline(in, line); istringstream ls(line); vector<double> v; double d; while (ls >> d) v.push_back(d); if (v.empty()) die("no value after " + k); return v; };
+    string shiftRatesIn = "";
     while (in >> key) {
         if (key == "tips") break;
         if (key == "cond") in >> cond;
@@ -245,9 +314,11 @@ void Chain::read(const string &path) {
         else if (key == "rho") in >> rho;
         else if (key == "root_prior") { in >> rootp; int c = rootp == "normal" ? 2 : rootp == "uniform" ? 2 : rootp == "soft" ? 4 : 0; rootv.resize(c); for (auto &v : rootv) in >> v; }
         else if (key == "origin_prior") { in >> origp; int c = origp == "uniform" ? 2 : 0; origv.resize(c); for (auto &v : origv) in >> v; }
-        else if (key == "init_lambda") in >> initLam;
-        else if (key == "init_mu") in >> initMu;
-        else if (key == "init_psi") in >> initPsi;
+        else if (key == "init_lambda") initLam = restNums(key);   // one value (all intervals) or one per interval
+        else if (key == "init_mu") initMu = restNums(key);
+        else if (key == "init_psi") initPsi = restNums(key);
+        else if (key == "rate_shifts") { string line; getline(in, line); istringstream ls(line); double d; shiftT.clear(); while (ls >> d) shiftT.push_back(d); }
+        else if (key == "shift_rates") in >> shiftRatesIn;
         else if (key == "init_cond_age") in >> initCond;
         else if (key == "init_clock") in >> initClock;
         else if (key == "rate_prior") { string rp; in >> rp; ucln = (rp == "ucln"); }
@@ -292,7 +363,26 @@ void Chain::read(const string &path) {
         else die("unknown section after terms: " + key);
     }
     initRates = initR;
-    lam = initLam; mu = initMu; psi = initPsi; m = initClock; if (useOrigin) origin = initCond; else age[root] = initCond;
+    // rate shifts: command line overrides the input
+    if (!opt.rateShifts.empty()) { shiftT.clear(); if (opt.rateShifts != "none") { string t; istringstream ss(opt.rateShifts); while (getline(ss, t, ',')) shiftT.push_back(stod(t)); } }
+    if (!opt.shiftRates.empty()) shiftRatesIn = opt.shiftRates;
+    for (size_t i = 0; i < shiftT.size(); i++) { if (!(shiftT[i] > 0) || !isfinite(shiftT[i])) die("rate shift times must be positive"); if (i && !(shiftT[i] > shiftT[i - 1])) die("rate shift times must be strictly increasing"); }
+    nShift = (int)shiftT.size(); nInt = nShift + 1;
+    if (!shiftRatesIn.empty()) {
+        vary[0] = vary[1] = vary[2] = false; string t; istringstream ss(shiftRatesIn);
+        while (getline(ss, t, ',')) { if (t == "lambda") vary[0] = true; else if (t == "mu") vary[1] = true; else if (t == "psi") vary[2] = true; else if (t != "none") die("shift_rates: unknown rate " + t + " (use lambda,mu,psi)"); }
+    }
+    if (nShift == 0) vary[0] = vary[1] = vary[2] = true;
+    auto fillRate = [&](vector<double> &dst, const vector<double> &src, int w, const char *nm) {
+        if ((int)src.size() == 1) dst.assign(nInt, src[0]);
+        else if ((int)src.size() == nInt) { dst = src; if (!vary[w]) for (double v : src) if (v != src[0]) die(string("init_") + nm + ": rate is shared across intervals but per-interval values differ"); }
+        else die(string("init_") + nm + ": give one value or one per interval (" + to_string(nInt) + ")");
+    };
+    fillRate(lamV, initLam, 0, "lambda"); fillRate(muV, initMu, 1, "mu"); fillRate(psiV, initPsi, 2, "psi");
+    P.K = Pn.K = nShift; P.T = Pn.T = shiftT;
+    if (opt.noFbd) { if (nShift == 0) die("--no-fbd (test option) needs rate shifts"); P.off = Pn.off = true; }
+    tSky.assign(4 * nInt, Tune());
+    m = initClock; if (useOrigin) origin = initCond; else age[root] = initCond;
     if (!opt.mode.empty()) mode = opt.mode;
     hasClock = (mode == "fast"); useData = hasClock && !opt.noData;
     lnRho = log(rho);
@@ -382,6 +472,7 @@ void Chain::init() {
     setupMoves();
     recomputeAll();
     tLam.val = tMu.val = tPsi.val = 0.3; tUD.val = 0.2; tRootS.val = 1.0; tRootCo.val = 1.0; tOrigin.val = 2.0; tRate.val = 0.5; tMean.val = 0.3; tJoint.val = 0.1; tVec.val = 0.05; tSigma.val = 0.2;
+    for (int i = 1; i < nInt; i++) for (int w = 0; w < 4; w++) tuneFor(w, i).val = w == 3 ? 0.2 : 0.3;
 }
 
 void Chain::setLabel(int v, int L) {
@@ -391,15 +482,16 @@ void Chain::setLabel(int v, int L) {
     if (L >= 0) { auto &r = region[L]; pos[v] = (int)r.size(); r.push_back(v); } else pos[v] = -1;
 }
 
-double Chain::lnFBDFull(const FBD &p) const {
+double Chain::lnFBDFull(const SkyFBD &p) const {
+    if (p.off) return 0.0;
     double s = 0; int nsa = 0;
     for (int f = n; f < N; f++) {
         s -= p.lnD(age[f]);
-        if (sa[f]) { s += p.lnPsi; nsa++; } else s += p.lnPsi + p.lnE(age[f]);
+        if (sa[f]) { s += p.lnPsi(age[f]); nsa++; } else s += p.lnPsi(age[f]) + p.lnE(age[f]);
     }
     for (int v = N; v < nNodes; v++) {
         s += p.lnD(age[v]);
-        if (!isSAParent(v) && (useOrigin || v != root)) s += p.lnLam;
+        if (!isSAParent(v) && (useOrigin || v != root)) s += p.lnLam(age[v]);
     }
     if (useOrigin) s += p.lnD(origin); else s += p.lnD(age[root]);
     s += n * log(p.rho);
@@ -408,7 +500,7 @@ double Chain::lnFBDFull(const FBD &p) const {
 }
 
 void Chain::recomputeAll() {
-    P.set(lam, mu, psi, rho);
+    P.set(lamV, muV, psiV, rho);
     lnFBD = lnFBDFull(P);
     lnRoot = useOrigin ? originPrior.ln(origin) : rootPrior.ln(age[root]);
     lnHyper = lnHyperFull();
@@ -436,6 +528,7 @@ bool Chain::moveNode() {
     if (hi <= lo) return false;
     double oldA = age[v], newA = lo + rng.u() * (hi - lo);
     double dF = P.lnD(newA) - P.lnD(oldA);
+    if (nShift) dF += P.lnLam(newA) - P.lnLam(oldA);
     double dD = 0, dP = 0;
     array<double, 4> nv{};
     bool tdv = timeDep && nNodeBranches[v] > 0;
@@ -461,6 +554,7 @@ bool Chain::moveCoupled() {
     if (hi <= lo) return false;
     double oldA = age[v], newA = lo + rng.u() * (hi - lo);
     double dF = P.lnD(newA) - P.lnD(oldA);
+    if (nShift) dF += P.lnLam(newA) - P.lnLam(oldA);
     int nb = nNodeBranches[v]; array<double, 3> oldT{}, newT{}, oldR{}, newR{};
     for (int i = 0; i < nb; i++) { oldT[i] = branchTime(nodeBranches[v][i]); }
     array<int, 12> S{}; int nS = 0; double before = 0;
@@ -491,11 +585,16 @@ bool Chain::moveFossilAge() {
         int p = par[f]; int s = sib(f);
         lo = max(lo, age[s]); hi = min(hi, top(p));
         if (hi <= lo) return false;
-        double a = lo + rng.u() * (hi - lo); age[f] = a; age[p] = a; return true;
+        double a = lo + rng.u() * (hi - lo);
+        if (nShift == 0) { age[f] = a; age[p] = a; return true; }   // constant rates: the target is flat in the SA age
+        double dS = P.lnPsi(a) - P.lnPsi(age[f]);                     // shifts: psi of the interval holding the sampled ancestor
+        if (log(rng.u()) < dS) { age[f] = a; age[p] = a; lnFBD += dS; return true; }
+        return false;
     }
     hi = min(hi, age[par[f]]); if (hi <= lo) return false;
     double oldA = age[f], newA = lo + rng.u() * (hi - lo);
     double dF = (P.lnE(newA) - P.lnD(newA)) - (P.lnE(oldA) - P.lnD(oldA));
+    if (nShift) dF += P.lnPsi(newA) - P.lnPsi(oldA);
     if (log(rng.u()) < dF) { age[f] = newA; lnFBD += dF; return true; }
     return false;
 }
@@ -566,6 +665,7 @@ bool Chain::moveRegraft(bool local) {
         newA = lo + rng.u() * (hi - lo);
         double rangeOld = (par[s] == -1 ? origin : age[par[s]]) - max(age[s], ageF);
         dF = P.lnD(newA) - P.lnD(oldAgeP);
+        if (nShift) dF += P.lnLam(newA) - P.lnLam(oldAgeP);
         logR = dF + hast + log(hi - lo) - log(rangeOld);
     }
     if (log(rng.u()) < logR) {
@@ -591,7 +691,7 @@ bool Chain::moveCollapseExpand() {
         double hi = top(p), lo = opt.rbSA ? winMax[f] : t;
         if (hi <= lo) return false;
         double a = lo + rng.u() * (hi - lo);
-        double dF = P.lnLam + P.lnE(t) + P.lnD(a) - P.lnD(t) + LN2;
+        double dF = P.lnLam(a) + P.lnE(t) + P.lnD(a) - P.lnD(t) + (P.off ? 0.0 : LN2);
         if (log(rng.u()) < dF + log(hi - lo)) { age[p] = a; sa[f] = 0; lnFBD += dF; return true; }
         return false;
     }
@@ -600,7 +700,7 @@ bool Chain::moveCollapseExpand() {
     if (s < N && sa[s]) return false;
     double hi = top(p), lo = opt.rbSA ? winMax[f] : t;
     if (hi <= lo) return false;
-    double dF = -(P.lnLam + P.lnE(t) + P.lnD(age[p]) - P.lnD(t) + LN2);
+    double dF = -(P.lnLam(age[p]) + P.lnE(t) + P.lnD(age[p]) - P.lnD(t) + (P.off ? 0.0 : LN2));
     if (log(rng.u()) < dF - log(hi - lo)) { age[p] = t; sa[f] = 1; lnFBD += dF; return true; }
     return false;
 }
@@ -723,25 +823,36 @@ bool Chain::moveVector() {
 }
 
 bool Chain::moveFBDScale(int which) {
-    Tune &t = which == 0 ? tLam : which == 1 ? tMu : tPsi;
-    double &par_ = which == 0 ? lam : which == 1 ? mu : psi;
-    double c = exp(t.val * (rng.u() - 0.5)), oldV = par_, newV = oldV * c;
+    // scale one free rate: lambda_j, mu_j or psi_j of interval j (or the shared value of a rate that does not vary across intervals)
+    int j = 0, nf = nFree(which); if (nf > 1) j = rng.below(nf);
+    lastInt = j;
+    Tune &t = tuneFor(which, j);
+    vector<double> &V = rateVec(which);
+    double c = exp(t.val * (rng.u() - 0.5)), oldV = V[j], newV = oldV * c;
     double dH = -10.0 * (newV - oldV);
-    par_ = newV;
-    FBD p; p.set(lam, mu, psi, rho);
-    double nF = lnFBDFull(p);
-    if (log(rng.u()) < (nF - lnFBD) + dH + log(c)) { P = p; lnFBD = nF; lnHyper += dH; return true; }
-    par_ = oldV; return false;
+    if (nf == nInt) V[j] = newV; else for (auto &x_ : V) x_ = newV;
+    Pn.set(lamV, muV, psiV, rho);
+    double nF = lnFBDFull(Pn);
+    if (log(rng.u()) < (nF - lnFBD) + dH + log(c)) { swap(P, Pn); lnFBD = nF; lnHyper += dH; return true; }
+    if (nf == nInt) V[j] = oldV; else for (auto &x_ : V) x_ = oldV;
+    return false;
 }
 
 bool Chain::moveUpDown() {
-    double c = exp(tUD.val * (rng.u() - 0.5)), oLam = lam, oMu = mu, nLam = lam * c, nMu = mu * c;
-    double dH = -10.0 * (nLam - oLam) - 10.0 * (nMu - oMu);
-    lam = nLam; mu = nMu;
-    FBD p; p.set(lam, mu, psi, rho);
-    double nF = lnFBDFull(p);
-    if (log(rng.u()) < (nF - lnFBD) + dH + 2.0 * log(c)) { P = p; lnFBD = nF; lnHyper += dH; return true; }
-    lam = oLam; mu = oMu; return false;
+    // lambda and mu of interval j scaled by the same factor (a shared lambda or mu is scaled as a whole)
+    int j = 0, nu = nUD(); if (nu > 1) j = rng.below(nu);
+    lastInt = j;
+    double c = exp(tuneFor(3, j).val * (rng.u() - 0.5));
+    vector<double> oL = lamV, oM = muV; double dH = 0;
+    if (nShift == 0) { double nLam = lamV[0] * c, nMu = muV[0] * c; dH = -10.0 * (nLam - oL[0]) - 10.0 * (nMu - oM[0]); lamV[0] = nLam; muV[0] = nMu; } // same operations as the constant-rate code
+    else {
+    if (nFree(0) == nInt) { dH += -10.0 * (lamV[j] * c - lamV[j]); lamV[j] *= c; } else { dH += -10.0 * (lamV[0] * c - lamV[0]); double v = lamV[0] * c; for (auto &x_ : lamV) x_ = v; }
+    if (nFree(1) == nInt) { dH += -10.0 * (muV[j] * c - muV[j]); muV[j] *= c; } else { dH += -10.0 * (muV[0] * c - muV[0]); double v = muV[0] * c; for (auto &x_ : muV) x_ = v; }
+    }
+    Pn.set(lamV, muV, psiV, rho);
+    double nF = lnFBDFull(Pn);
+    if (log(rng.u()) < (nF - lnFBD) + dH + 2.0 * log(c)) { swap(P, Pn); lnFBD = nF; lnHyper += dH; return true; }
+    lamV = oL; muV = oM; return false;
 }
 
 void Chain::setupMoves() {
@@ -756,7 +867,7 @@ void Chain::setupMoves() {
     if (!useOrigin) { weights[M_ROOT] = 5 + ne / 50; if (hasClock) weights[M_ROOTC] = 5 + ne / 50; } else weights[M_ORIGIN] = 5;
     if (opt.fixFbd) { weights[M_ROOT] = weights[M_ROOTC] = weights[M_ORIGIN] = 0; }
     if (hasClock) { weights[M_RATE] = K; weights[M_RATESCALE_JOINT] = 3; weights[M_RATESCALE_ALL] = 2; weights[M_MEAN] = 5; if (clk > 0) weights[M_SIGMA] = 5; }
-    if (!opt.fixFbd) { weights[M_LAMBDA] = 3; weights[M_MU] = 3; weights[M_PSI] = 3; weights[M_UPDOWN] = 2; }
+    if (!opt.fixFbd) { weights[M_LAMBDA] = 3 * nFree(0); weights[M_MU] = 3 * nFree(1); weights[M_PSI] = 3 * nFree(2); weights[M_UPDOWN] = 2 * nUD(); } // per free rate, as for one interval
     for (int i = 0; i < N_MOVES; i++) if (opt.noMoves.find(MOVE_NAMES[i]) != string::npos) weights[i] = 0.0;
     cum.resize(N_MOVES); totalW = 0; for (int i = 0; i < N_MOVES; i++) { totalW += weights[i]; cum[i] = totalW; }
 }
@@ -836,7 +947,14 @@ string Chain::newick() const {
 }
 
 void Chain::writeHeader(FILE *lf, FILE *tf) {
-    fprintf(lf, "Iteration\tPosterior\tLikelihood\tPrior\tcond_age\troot_age_tree\tnum_samp_anc\tspeciation_rate\textinction_rate\tpsi\tdiversification\tturnover");
+    if (nShift == 0) fprintf(lf, "Iteration\tPosterior\tLikelihood\tPrior\tcond_age\troot_age_tree\tnum_samp_anc\tspeciation_rate\textinction_rate\tpsi\tdiversification\tturnover");
+    else { // skyline: name[i], i = 1 the youngest interval [0, T1); a rate shared by all intervals is one column without index
+        fprintf(lf, "Iteration\tPosterior\tLikelihood\tPrior\tcond_age\troot_age_tree\tnum_samp_anc");
+        const char *rn[] = {"speciation_rate", "extinction_rate", "psi"};
+        for (int w = 0; w < 3; w++) { if (nFree(w) == 1) fprintf(lf, "\t%s", rn[w]); else for (int i = 0; i < nInt; i++) fprintf(lf, "\t%s[%d]", rn[w], i + 1); }
+        for (int i = 0; i < nInt; i++) fprintf(lf, "\tdiversification[%d]", i + 1);
+        for (int i = 0; i < nInt; i++) fprintf(lf, "\tturnover[%d]", i + 1);
+    }
     if (useOrigin) fprintf(lf, "\torigin_time");
     for (auto &nm : extName) fprintf(lf, "\tage_%s", nm.c_str());
     if (hasClock) { fprintf(lf, "\tbranch_rates_mean\tmean_rt\tmean_rate"); if (clk > 0) { const char *hn[] = {"", "ucln_sigma", "gam_k", "igr_v", "acln_s"}; fprintf(lf, "\t%s", hn[clk]); } if (opt.logRates) for (int b = 0; b < K; b++) fprintf(lf, "\tbranch_rates[%d]", b + 1); }
@@ -850,7 +968,13 @@ void Chain::writeLog(FILE *lf) {
     int nsa = 0; for (int f = n; f < N; f++) nsa += sa[f];
     double cond = useOrigin ? origin : age[root];
     double meanR = K > 0 ? accumulate(rates.begin(), rates.end(), 0.0) / K : 0.0;
-    fprintf(lf, "%ld\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g\t%d\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g", iter, like + prior, like, prior, cond, age[root], nsa, lam, mu, psi, lam - mu, mu / lam);
+    if (nShift == 0) fprintf(lf, "%ld\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g\t%d\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g", iter, like + prior, like, prior, cond, age[root], nsa, lamV[0], muV[0], psiV[0], lamV[0] - muV[0], muV[0] / lamV[0]);
+    else {
+        fprintf(lf, "%ld\t%.10g\t%.10g\t%.10g\t%.10g\t%.10g\t%d", iter, like + prior, like, prior, cond, age[root], nsa);
+        for (int w = 0; w < 3; w++) for (int i = 0; i < nFree(w); i++) fprintf(lf, "\t%.10g", rateVec(w)[i]);
+        for (int i = 0; i < nInt; i++) fprintf(lf, "\t%.10g", lamV[i] - muV[i]);
+        for (int i = 0; i < nInt; i++) fprintf(lf, "\t%.10g", muV[i] / lamV[i]);
+    }
     if (useOrigin) fprintf(lf, "\t%.10g", origin);
     for (int v : extNode) fprintf(lf, "\t%.10g", age[v]);
     if (hasClock) { fprintf(lf, "\t%.10g\t%.10g\t%.10g", m, meanR, meanR); if (clk > 0) fprintf(lf, "\t%.10g", sigma); if (opt.logRates) for (int b = 0; b < K; b++) fprintf(lf, "\t%.10g", rates[b]); }
@@ -866,7 +990,9 @@ void Chain::writeTree(FILE *tf) {
 
 void Chain::dumpState(FILE *f) {
     double cond = useOrigin ? origin : age[root];
-    fprintf(f, "%ld\t%.17g\t%.17g\t%.17g\t%.17g\t%.17g\t", iter, lam, mu, psi, cond, m);
+    fprintf(f, "%ld", iter); // skyline: lambda, mu, psi fields are comma-separated lists, one value per interval (youngest first)
+    for (int w = 0; w < 3; w++) for (int i = 0; i < nInt; i++) fprintf(f, i ? ",%.17g" : "\t%.17g", rateVec(w)[i]);
+    fprintf(f, "\t%.17g\t%.17g\t", cond, m);
     for (int b = 0; b < K; b++) fprintf(f, b ? ",%.17g" : "%.17g", rates[b]);
     double fb = lnFBDFull(P), r = useOrigin ? originPrior.ln(origin) : rootPrior.ln(age[root]);
     double d = 0; for (int j = 0; j < J; j++) d += termLL(j); // data terms reported even under --no-data, for the density check
@@ -887,7 +1013,7 @@ void Chain::saveCheckpoint(const string &path) const {
     string tmp = path + ".tmp";
     {
         ofstream o(tmp); o << setprecision(17);
-        o << iter << ' ' << burnDone << '\n' << lam << ' ' << mu << ' ' << psi << ' ' << m << ' ' << sigma << ' ' << origin << ' ' << root << '\n';
+        o << iter << ' ' << burnDone << '\n' << lamV[0] << ' ' << muV[0] << ' ' << psiV[0] << ' ' << m << ' ' << sigma << ' ' << origin << ' ' << root << '\n';
         o << rng.e << '\n';
         for (int v = 0; v < nNodes; v++) o << par[v] << ' ' << c0[v] << ' ' << c1[v] << ' ' << age[v] << ' ' << int(sa[v]) << ' ' << label[v] << '\n';
         for (int k = 0; k <= nCons; k++) o << x[k] << ' ';
@@ -897,6 +1023,11 @@ void Chain::saveCheckpoint(const string &path) const {
         const Tune *ts[] = {&tLam, &tMu, &tPsi, &tUD, &tRootS, &tRootCo, &tOrigin, &tRate, &tMean, &tJoint, &tVec, &tSigma};
         for (auto *t : ts) o << t->val << ' ' << t->att << ' ' << t->acc << ' ' << t->totalAtt << ' ' << t->totalAcc << ' ' << t->cycles << '\n';
         for (int i = 0; i < N_MOVES; i++) o << att[i] << ' ' << acc[i] << ' '; o << '\n';
+        if (nShift > 0) {
+            o << "SKY " << nInt; for (int w = 0; w < 3; w++) for (int i = 0; i < nInt; i++) o << ' ' << rateVec(w)[i]; o << '\n';
+            for (int i = 1; i < nInt; i++) for (int w = 0; w < 4; w++) { const Tune &t = tuneFor(w, i); o << t.val << ' ' << t.att << ' ' << t.acc << ' ' << t.totalAtt << ' ' << t.totalAcc << ' ' << t.cycles << '\n'; }
+            o << lastInt << '\n';
+        }
         o << "END\n";
     }
     rename(tmp.c_str(), path.c_str());
@@ -904,7 +1035,7 @@ void Chain::saveCheckpoint(const string &path) const {
 
 void Chain::loadCheckpoint(const string &path) {
     ifstream in(path); if (!in) die("cannot read checkpoint " + path);
-    in >> iter >> burnDone >> lam >> mu >> psi >> m >> sigma >> origin >> root >> rng.e;
+    in >> iter >> burnDone >> lamV[0] >> muV[0] >> psiV[0] >> m >> sigma >> origin >> root >> rng.e;
     uclnMu = log(m) - 0.5 * sigma * sigma;
     for (int v = 0; v < nNodes; v++) { int s, l; in >> par[v] >> c0[v] >> c1[v] >> age[v] >> s >> l; sa[v] = (char)s; label[v] = -2 - l; }
     for (int v = 0; v < nNodes; v++) { label[v] = -2 - label[v]; pos[v] = -1; }
@@ -915,7 +1046,14 @@ void Chain::loadCheckpoint(const string &path) {
     Tune *ts[] = {&tLam, &tMu, &tPsi, &tUD, &tRootS, &tRootCo, &tOrigin, &tRate, &tMean, &tJoint, &tVec, &tSigma};
     for (auto *t : ts) in >> t->val >> t->att >> t->acc >> t->totalAtt >> t->totalAcc >> t->cycles;
     for (int i = 0; i < N_MOVES; i++) in >> att[i] >> acc[i];
-    string e; in >> e; if (e != "END") die("truncated checkpoint");
+    string e; in >> e;
+    if (nShift > 0) {
+        int ni = 0; if (e != "SKY") die("checkpoint has no rate-shift block (written without shifts?)"); in >> ni; if (ni != nInt) die("checkpoint has a different number of rate intervals");
+        for (int w = 0; w < 3; w++) for (int i = 0; i < nInt; i++) in >> rateVec(w)[i];
+        for (int i = 1; i < nInt; i++) for (int w = 0; w < 4; w++) { Tune &t = tuneFor(w, i); in >> t.val >> t.att >> t.acc >> t.totalAtt >> t.totalAcc >> t.cycles; }
+        in >> lastInt >> e;
+    } else if (e == "SKY") die("checkpoint was written with rate shifts; give the same rate_shifts");
+    if (e != "END") die("truncated checkpoint");
     recomputeAll();
 }
 
@@ -926,6 +1064,7 @@ void Chain::summary() const {
         if (weights[i] <= 0) continue;
         printf("  %-24s %12ld %12ld %8.4f", MOVE_NAMES[i], att[i], acc[i], att[i] ? (double)acc[i] / att[i] : 0.0);
         if (tmap[i]) printf("  tune=%.4g", tmap[i]->val);
+        if (nShift > 0 && i >= M_LAMBDA && i <= M_UPDOWN) { int nf = i == M_UPDOWN ? nUD() : nFree(i - M_LAMBDA); if (nf > 1) { printf(" (interval 1)"); for (int q = 1; q < nf; q++) printf(" %.4g", tuneFor(i - M_LAMBDA, q).val); } }
         printf("\n");
     }
 }
@@ -953,6 +1092,7 @@ void Chain::run() {
     if (!opt.dumpFile.empty()) { df = fopen(opt.dumpFile.c_str(), res ? "a" : "w"); }
     if (!lf || !tf) die("cannot open output");
     printf("ffbd: taxa %d (extant %d, fossils %d), mode %s, cond %s, data %d, rho %g, moves total weight %g\n", N, n, mF, mode.c_str(), cond.c_str(), (int)useData, rho, totalW);
+    if (nShift > 0) { printf("rate shifts at"); for (double t : shiftT) printf(" %g", t); printf(" Ma: %d intervals; varying across intervals:%s%s%s\n", nInt, vary[0] ? " lambda" : "", vary[1] ? " mu" : "", vary[2] ? " psi" : ""); }
     printf("START lnFBD %.8f lnRoot %.8f lnHyper %.8f lnRatePrior %.8f lnData %.8f lnWin %.8f total %.8f\n", lnFBD, lnRoot, lnHyper, lnRatePrior, lnData, lnWin, lnFBD + lnRoot + lnHyper + lnRatePrior + lnData + lnWin);
     if (opt.check) validate();
     auto t0 = chrono::steady_clock::now();
@@ -971,8 +1111,7 @@ void Chain::run() {
                 case M_LAMBDA: ok = moveFBDScale(0); break; case M_MU: ok = moveFBDScale(1); break; case M_PSI: ok = moveFBDScale(2); break; case M_UPDOWN: ok = moveUpDown(); break;
             }
             att[mv]++; if (ok) acc[mv]++;
-            Tune *tm[N_MOVES] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &tRootS, &tRootCo, &tOrigin, &tRate, &tJoint, &tVec, &tMean, &tSigma, &tLam, &tMu, &tPsi, &tUD};
-            if (tm[mv]) { bool slide = (mv == M_ROOT || mv == M_ROOTC || mv == M_ORIGIN); tm[mv]->hit(ok); tm[mv]->adapt(slide ? 0.44 : 0.30, 1e-6, slide ? 200.0 : 2.0); }
+            tuneHit(mv, ok);
             if (opt.checkPerStep) validate();
         }
         tuning = false;
@@ -1033,6 +1172,7 @@ bool Chain::step(int mv) {
 }
 void Chain::tuneHit(int mv, bool ok) {
     Tune *tm[N_MOVES] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &tRootS, &tRootCo, &tOrigin, &tRate, &tJoint, &tVec, &tMean, &tSigma, &tLam, &tMu, &tPsi, &tUD};
+    if (mv >= M_LAMBDA && mv <= M_UPDOWN) tm[mv] = &tuneFor(mv - M_LAMBDA, lastInt); // the interval the move just used
     if (tm[mv]) { bool slide = (mv == M_ROOT || mv == M_ROOTC || mv == M_ORIGIN); tm[mv]->hit(ok); tm[mv]->adapt(slide ? 0.44 : 0.30, 1e-6, slide ? 200.0 : 2.0); }
 }
 void Chain::runSS() {
@@ -1082,6 +1222,7 @@ void Chain::runSS() {
 static void usage() {
     cerr << "usage: ffbd run INPUT --prefix P --seed S --gens G [--print N] [--tree-print N] [--checkpoint N] [--burnin N] [--mode fast|control] [--no-data] [--resume] [--check|--check-every-step] [--rb-sa-move] [--log-rates] [--dump FILE --dump-every N]\n"
             "       [--clock exp|ln|gam|igr|acln] [--hyper-rate R] [--init-hyper X]\n"
+            "       [--rate-shifts T1,T2,...|none] [--shift-rates lambda,mu,psi]   piecewise-constant FBD rates (override input keywords rate_shifts, shift_rates)\n"
             "       marginal likelihood: --ss K --ss-gens G [--ss-burn B] [--ss-every E] [--ss-alpha 0.3] [--burnin N]   writes PREFIX.pp, PREFIX.ml.tsv\n";
     exit(2);
 }
@@ -1103,6 +1244,7 @@ int main(int argc, char **argv) {
         else if (a == "--clock") o.clock = val(); else if (a == "--hyper-rate") o.hyperRate = stod(val()); else if (a == "--init-hyper") o.initHyper = stod(val());
         else if (a == "--ss") o.ssStones = stoi(val()); else if (a == "--ss-alpha") o.ssAlpha = stod(val()); else if (a == "--ss-gens") o.ssGens = stol(val());
         else if (a == "--ss-burn") o.ssBurn = stol(val()); else if (a == "--ss-every") o.ssEvery = stol(val());
+        else if (a == "--no-fbd") o.noFbd = true; else if (a == "--rate-shifts") o.rateShifts = val(); else if (a == "--shift-rates") o.shiftRates = val();
         else usage();
     }
     Chain c(o); c.read(o.input); c.init();
