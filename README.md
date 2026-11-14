@@ -44,6 +44,8 @@ cd fast_FBD
 make
 ```
 
+To check the build, run `make test` (about a minute). It runs every clock on both examples with a full recomputation of the posterior after every proposal, a short stepping-stone run, and the bears example, and reports `all tests passed`.
+
 ## Quick start
 
 The quick start uses real data: the 8 living and 14 fossil bears of the RevBayes FBD tutorial (fossils after Heath et al. 2014; branch lengths and standard errors from the tutorial's cytochrome b alignment), in `examples/bears_input.txt`. Every step takes seconds. A tiny simulated set (4 living species, 3 fossils) used by the tests is in `examples/example_input.txt`.

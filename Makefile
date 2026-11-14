@@ -8,5 +8,8 @@ ffbd: ffbd.cpp
 ffbd_sim: ffbd_sim.cpp
 	$(CXX) -std=c++17 -O2 -o ffbd_sim ffbd_sim.cpp
 
+test: ffbd
+	sh tests/run_tests.sh
+
 clean:
 	rm -f ffbd ffbd_sim
