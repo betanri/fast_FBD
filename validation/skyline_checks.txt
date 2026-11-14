@@ -1,0 +1,184 @@
+Rate shifts (skyline, piecewise-constant FBD) in ffbd (ffbd_sky.cpp, 14 Nov 2026; now also ffbd.cpp): checks. Usage: results/skyline_usage.md.
+Model: K shift ages (input rate_shifts T1 ... TK, or --rate-shifts) give K+1 intervals with their own lambda_i, mu_i, psi_i; rho at the present,
+r = 0, sampled ancestors, root or origin conditioning as before; density of RevBayes 1.3.2 dnBDSTP(..., timeline=v(T1,...,TK)), rates youngest
+first. Each free rate ~ Exp(10). Optional shift_rates (--shift-rates) chooses which of lambda, mu, psi vary; the others are shared.
+Moves: scale per free rate (weight 3 each), up-down per interval (weight 2 each), each tuned separately; the sampled-ancestor fossil-age move
+becomes a Metropolis-Hastings step when shifts are present.
+
+1. Regression (no shifts = previous binary, byte for byte). 3M proposals, seed 7, .log and .trees compared with cmp.
+   examples/example_input.txt, example_crown_stem.txt, bears_input.txt x {default clock, --burnin 1e5, --no-data, --clock gam, --clock acln,
+   --mode control}: 18/18 identical on the laptop (clang) and 18/18 on OSCER (g++ 13.3 -O3 static, job 36057843; reference = ffbd_release.cpp).
+   Also identical: GS_Jn --clock gam 3M; stepping-stone .pp and .ml.tsv (--ss 8, example); bears igr 2M with checkpoints, .ckp file included.
+   ffbd_sim without shifts: identical input and truth line for seeds 11-13, root and origin. make test (release folder, submission-prep): all tests passed.
+   (One fix was needed: on Apple clang the up-down move's prior term must keep the old expression, or fused multiply-add changes the
+   last digit of cached sums; it now does.)
+
+2. FBD log density against RevBayes 1.3.2 dnBDSTP (scripts/sky_density_check.py; jobs 36056781, 36056976, 36057214-36057217, 36057842).
+   1,012 state evaluations. Each configuration has 20 MCMC states (--no-data, rates and tree sampled) plus 16 states at random fixed rates
+   (log-uniform 0.005-1 per rate and interval, --fix-fbd).
+   RevBayes computes ln N! of the tree-shape term by Stirling's series to the 1/(360 N^3) term. That gives a constant offset of
+   -4.6519e-8 at N = 7 (it matches the observed offset to 5e-14 in every state), -1.5e-10 at N = 22 and below 1e-12 for larger trees.
+   The "corrected" difference removes this constant; raw differences are that constant plus the corrected one.
+   tree (N tips, SA range)              conditioning  shifts tested                      states  worst |ffbd - RevBayes|, corrected
+   example_input (7, 0-3 SA)            root          10; 7,14; 3,9,13; 2.5,16.9          144    2.5e-13
+   example_input, lambda varies only    root          7,14 (mu, psi shared)                20    5.5e-14
+   example_crown_stem (7)               root          8; 5,12                              72    6.2e-13
+   example_input as origin (7)          origin        10; 4,8,16; 7,14,40 (40 > origin)   108    6.2e-14
+   bears (22, 6-14 SA)                  origin        5; 2,10; 1.5,4.5,20                 108    5.3e-13
+   6 ffbd_sim trees (7, 0-3 SA)         3 root, 3 orig  6,13 / 4,9,15                     216    9.1e-14
+   simulated FBD tree, 104 extant +     root          30,60; 10,45,80                      72    7.8e-12   (|lnP| up to 1,955)
+     48 fossils (sim_study.py simulate seed 5; 14-48 SA)
+   GS_Jn (2,772 tips, 155-856 SA)       root          66,150; 23,66,252                    43    2.0e-9    (|lnP| up to 8.4e4; relative 5e-14)
+   Constant special case:
+     equal rates in all intervals (--shift-rates none) against constant dnBDSTP (no timeline): example 5.2e-14, bears 5.3e-13, simbig 4.9e-12
+     (and against dnBDSTP with the timeline: the same numbers); no shifts at all: example 4.4e-14, bears 4.7e-13, simbig 5.6e-12, GS_Jn 2.3e-9.
+     SkyFBD with equal rates against the constant FBD functions, 1e6 random (rates, 1-3 shifts, age): lnD relative 6e-15, lnE 5e-11, lnLam/lnPsi 0.
+   Sampled-ancestor counts agree in all states but one (below).
+   Two groups of GS_Jn states are outside the 1e-8 target and are reported separately, not loosened:
+   a) 28 states with an age within 1e-12 of a shift time. These are fossils at their window minimum (66.0 or 23.0 Ma, as placed by the starting
+      tree) and the nodes pushed to them. Differences are up to 5.2e-5 (gs 66,150: 1.8e-5; gs 23,66,252: 5.2e-5). An independent 50-digit
+      evaluation (mpmath; same equations, ages read from the newick) agrees with ffbd on these states to 1.1e-9. With the shift moved to 66.5,
+      RevBayes agrees with the 50-digit value on the same three trees to 1.5e-9; with 66.0 it reproduces 1.4e-5, 1.8e-5, 2.0e-6 (job 36057842).
+      So the deviation is on the RevBayes side, for ages at a shift time. In MCMC such ages have probability zero (fossil ages are continuous).
+   b) 1 degenerate state (gs 23,66,252, state 27): a non-SA fossil (Saurorhamphus judeaensis) with an age exactly equal to its parent node,
+      whose other child is a sampled ancestor (Vegrandichthys coitecus); both have the window 93.9-96.9. The newick shows two zero-length
+      fossil tips on one node. RevBayes reads 649 SAs where ffbd has 650, and the densities differ by 0.58 (ffbd's value is the continuous limit).
+      The configuration arose by floating-point rounding in a fossil-age draw from an interval of width about 1e-10. It is not in the starting
+      tree, and the constant-rate moves can reach it the same way. 1 of 1,012 states; not a skyline issue. Possible fix, not made here because
+      it would change the constant-rate code: reject a proposal that makes a non-SA fossil's age equal to its parent's.
+   Independent 50-digit check of ffbd (no RevBayes involved; 21 configurations, 708 states: all skyline sets of the examples, origin example, bears, simbig and
+   GS_Jn set, 2 of the 6 ffbd_sim sets): largest |ffbd - mp| 3.8e-13 on the small trees, 3.5e-12 on simbig, 2.0e-9 on GS_Jn, including
+   the states at shift times. The degenerate state is the only exception (0.68; the mp script reads both zero-length fossil tips as SAs).
+
+3. Cache check (--check-every-step: after every proposal, all cached terms recomputed from scratch and compared, tolerance 1e-6).
+   No error in 135/135 runs on the examples: example_input, example_crown_stem, bears x 3 shift sets (1, 2 and 3 shifts) x shift_rates
+   {lambda,mu,psi | lambda,mu | psi} x clocks {exp, ln, gam, igr, acln}; 300,000 proposals + 20,000 burn-in each, all checked.
+   GS_Jn (1,184 species, inp GS_Jn_fast.txt): no error in 11/11 runs: shifts 66,150 and 23,66,252 x 5 clocks, plus 66,150 with psi shared
+   (gam); each 5,000 burn-in + 5,000 proposals, every one checked.
+   Restart: with shifts and shift_rates lambda,psi, a 400k run and a 150k + --resume to 400k run give byte-identical .log and .trees.
+
+4. Prior recovery (--no-data, 2e8 proposals, sampled every 2,000; KS against Exp(10) on every 5th sample, n = 20,000; lag-1 autocorrelation
+   of the samples at most 0.04). With fixed tips the FBD tree density itself informs lambda, mu and psi, so under --no-data the
+   rates of intervals spanned by the tree are not Exp(10). Two checks therefore:
+   a) the FBD density switched off (test-only flag --no-fbd): every rate of every interval = Exp(10).
+      example, 3 intervals (7,14): 9 rates, KS p 0.26-0.90, means 0.1000-0.1006, sds 0.0999-0.1014.
+      bears, 4 intervals (2,10,30): 12 rates, KS p 0.021-0.76 (smallest: speciation_rate[1] 0.021; Bonferroni threshold 0.05/26 = 0.0019).
+      example, lambda varies, mu and psi shared: 5 rates, KS p 0.26-0.96.
+   b) FBD density on, an interval older than the root (shifts 7,14,40, root < 25): its rates are not in the density and recover Exp(10):
+      speciation_rate[4] KS p 0.35, extinction_rate[4] 0.40, psi[4] 0.95. The intervals the tree spans are moved by the tree, as expected
+      (for example, extinction_rate[1] mean 0.057 and psi[1] mean 0.028).
+
+5. Simulation-based calibration with 2 shifts (7 and 14 Ma; ffbd_sim extended to piecewise-constant rates; scripts/sbc_sky.py, same design
+   as sbc.py: start = truth, 2e6 proposals per replicate, 200 draws). Rank uniformity by chi-square and KS.
+   setting                                   reps  quantities  smallest p chi2 / KS   Bonferroni   result
+   A root, with data, all rates vary          500   19          0.016 / 0.062          0.0026       pass
+   B root, no data                            500   19          0.041 / 0.048          0.0026       pass
+   C origin, with data                        300   19          0.096 / 0.11           0.0026       pass
+   D root, with data, psi shared              300   17          0.0045 / 0.12          0.0029       pass
+   Quantities: speciation_rate[1-3], extinction_rate[1-3], psi[1-3] (D: psi), root or origin age, root age, ages of n1 and n2, number of
+   sampled ancestors, the three fossil ages, mean clock rate and mean branch rate. Per-quantity tables are at the end of this file.
+
+6. Speed on GS_Jn (laptop, 20M proposals, burn-in 2e5; minimum of 3 runs; machine shared with other jobs, load 9-17).
+   s per 1M proposals            exp clock    gam clock
+   previous binary               0.182        0.215
+   new, no shifts                0.185        0.219     (+2%)
+   new, 2 shifts (66,150)        0.297        0.332     (+60%)
+   new, 3 shifts (23,66,252)     0.332        0.367     (+71-82%)
+   Why: each free rate has its own scale move with the weight of the constant-rate move, so 3x or 4x as many proposals recompute the full FBD
+   density (O(N) each). Local moves cost the same as before. An incremental density for the rate moves (only intervals at or older than the
+   one changed) could reduce this; not done.
+
+Files: ffbd_sky.cpp (= new ffbd.cpp; also fast_FBD_release/ffbd.cpp, uncommitted), ffbd_sim_sky.cpp (= new ffbd_sim.cpp; also release),
+previous versions kept as ffbd_pre_sky.cpp and ffbd_sim_pre_sky.cpp; scripts/sky_density_check.py, scripts/sbc_sky.py. ffbd_convert.py unchanged.
+
+---- SBC per-quantity tables (sbc_sky.py analyze) ----
+== setting A
+replicates 500, bins 20
+param	chi2	p_chi2	KS_D	p_KS	mean_rank	bin_counts
+speciation_rate[1]	13.44	0.815	0.034	0.619	0.498	25,20,32,21,25,26,31,23,29,26,26,28,23,15,21,24,25,21,29,30
+speciation_rate[2]	15.04	0.720	0.036	0.533	0.491	36,30,19,29,22,25,24,26,24,18,16,22,26,25,27,29,27,24,25,26
+speciation_rate[3]	21.68	0.300	0.035	0.580	0.503	23,25,29,20,16,22,33,22,28,22,35,24,27,25,34,25,17,29,26,18
+extinction_rate[1]	22.56	0.257	0.050	0.152	0.514	29,28,21,19,22,18,30,15,22,22,36,27,23,22,26,35,26,31,26,22
+extinction_rate[2]	14.96	0.725	0.045	0.256	0.478	32,25,26,29,29,23,29,26,16,27,25,26,28,25,17,22,28,28,16,23
+extinction_rate[3]	10.16	0.949	0.032	0.679	0.489	30,28,23,27,19,28,33,27,21,23,24,25,22,27,21,27,23,22,29,21
+psi[1]	12.24	0.875	0.039	0.433	0.481	31,33,23,25,22,22,24,28,30,23,27,24,28,24,26,26,17,17,25,25
+psi[2]	10.48	0.940	0.038	0.452	0.484	26,27,28,28,29,22,23,20,29,28,22,29,31,19,24,25,25,26,19,20
+psi[3]	34.40	0.016	0.048	0.195	0.510	29,24,14,34,18,23,26,39,18,17,17,18,32,26,32,27,27,32,22,25
+cond_age	16.64	0.614	0.033	0.656	0.505	28,23,17,25,26,26,25,28,18,22,35,33,20,24,30,19,28,22,26,25
+root_age_tree	16.64	0.614	0.033	0.656	0.505	28,23,17,25,26,26,25,28,18,22,35,33,20,24,30,19,28,22,26,25
+age_n1	32.40	0.028	0.031	0.700	0.501	33,26,20,28,33,10,18,29,33,17,21,19,27,26,33,22,34,24,21,26
+age_n2	22.56	0.257	0.040	0.405	0.492	30,23,38,18,27,22,25,25,19,16,24,27,29,29,27,31,23,16,29,22
+num_samp_anc	12.56	0.860	0.042	0.345	0.488	31,20,33,25,24,30,30,16,25,25,23,21,26,23,25,26,27,20,26,24
+age_FOSSIL_1	19.92	0.399	0.031	0.734	0.507	15,22,34,24,22,22,32,21,29,28,21,22,31,26,27,22,28,28,30,16
+age_FOSSIL_2	13.36	0.820	0.026	0.874	0.506	25,24,27,21,20,23,29,32,22,22,29,25,28,19,27,26,18,26,23,34
+age_FOSSIL_3	12.56	0.860	0.023	0.958	0.494	31,29,19,24,22,23,30,25,18,22,34,24,25,27,28,26,21,23,27,22
+branch_rates_mean	14.96	0.725	0.059	0.062	0.521	25,19,29,18,22,26,18,24,21,27,25,23,36,28,22,28,27,31,26,25
+mean_rt	24.56	0.176	0.031	0.729	0.508	33,16,26,20,19,24,36,26,27,25,16,28,21,30,22,20,29,20,32,30
+smallest p-value: chi2 0.0165, KS 0.0622 (19 quantities; Bonferroni threshold 0.05/19 = 0.0026)
+== setting B
+replicates 500, bins 20
+param	chi2	p_chi2	KS_D	p_KS	mean_rank	bin_counts
+speciation_rate[1]	13.04	0.837	0.044	0.286	0.514	25,24,27,19,24,28,15,24,20,27,24,23,26,35,28,28,26,25,29,23
+speciation_rate[2]	29.52	0.058	0.039	0.422	0.501	24,32,17,26,22,25,25,21,29,19,22,22,28,45,26,28,25,28,17,19
+speciation_rate[3]	15.28	0.705	0.029	0.797	0.500	29,23,25,24,25,32,20,24,21,23,21,23,22,32,26,37,26,20,21,26
+extinction_rate[1]	23.60	0.212	0.054	0.102	0.510	20,12,18,32,31,28,22,26,34,25,30,26,23,24,20,23,29,32,19,26
+extinction_rate[2]	12.96	0.841	0.030	0.759	0.490	29,20,31,23,23,25,30,19,29,25,28,22,33,22,25,25,23,22,28,18
+extinction_rate[3]	26.56	0.115	0.037	0.495	0.513	33,21,14,16,33,28,24,19,30,18,24,31,18,28,29,32,23,22,29,28
+psi[1]	24.96	0.162	0.061	0.048	0.520	24,26,30,22,14,19,25,16,21,33,25,34,22,31,27,25,20,22,34,30
+psi[2]	18.32	0.501	0.042	0.326	0.507	26,23,22,25,23,17,24,31,24,22,22,41,26,25,26,30,24,21,27,21
+psi[3]	15.28	0.705	0.043	0.305	0.516	23,18,25,25,24,19,27,26,30,17,26,25,28,27,32,28,19,25,34,22
+cond_age	17.28	0.571	0.045	0.255	0.509	22,28,25,29,24,22,25,21,15,19,27,24,38,29,23,25,24,31,23,26
+root_age_tree	17.28	0.571	0.045	0.255	0.509	22,28,25,29,24,22,25,21,15,19,27,24,38,29,23,25,24,31,23,26
+age_n1	13.76	0.797	0.028	0.829	0.502	24,26,36,22,22,24,24,28,19,23,17,27,24,24,27,31,30,22,23,27
+age_n2	16.88	0.598	0.031	0.712	0.495	27,25,32,18,22,23,25,38,25,22,24,22,25,20,25,28,19,31,22,27
+num_samp_anc	10.24	0.947	0.037	0.505	0.511	31,17,21,22,19,27,28,24,26,26,25,24,27,31,29,22,25,25,23,28
+age_FOSSIL_1	18.32	0.501	0.051	0.151	0.522	25,25,13,16,29,29,25,20,21,27,33,20,26,28,25,31,29,26,27,25
+age_FOSSIL_2	21.04	0.335	0.057	0.077	0.480	27,28,32,32,27,19,29,23,25,20,35,18,20,26,13,25,24,28,24,25
+age_FOSSIL_3	18.88	0.465	0.030	0.737	0.507	19,19,32,25,26,26,28,18,29,24,20,30,33,25,16,23,24,29,32,22
+branch_rates_mean	25.28	0.152	0.034	0.595	0.511	28,16,21,24,27,28,16,25,36,23,29,33,21,18,26,20,26,28,20,35
+mean_rt	30.96	0.041	0.045	0.258	0.516	24,16,27,19,29,25,17,22,31,33,27,25,33,13,22,32,27,22,19,37
+smallest p-value: chi2 0.0408, KS 0.0477 (19 quantities; Bonferroni threshold 0.05/19 = 0.0026)
+== setting C
+replicates 300, bins 12
+param	chi2	p_chi2	KS_D	p_KS	mean_rank	bin_counts
+speciation_rate[1]	17.44	0.096	0.036	0.830	0.500	20,40,21,19,25,25,27,20,29,19,32,23
+speciation_rate[2]	7.04	0.796	0.062	0.188	0.527	24,27,18,20,22,25,25,22,30,27,30,30
+speciation_rate[3]	5.68	0.894	0.054	0.340	0.486	24,24,28,26,28,25,27,30,22,26,24,16
+extinction_rate[1]	4.80	0.940	0.039	0.746	0.487	25,29,21,29,24,29,23,28,20,26,21,25
+extinction_rate[2]	4.96	0.933	0.048	0.490	0.518	19,22,24,27,22,24,30,25,30,23,28,26
+extinction_rate[3]	16.72	0.116	0.069	0.114	0.534	18,31,19,20,28,23,23,23,22,33,22,38
+psi[1]	5.28	0.917	0.030	0.942	0.494	31,20,25,27,25,23,27,19,28,28,23,24
+psi[2]	8.48	0.670	0.040	0.708	0.514	23,20,27,23,33,27,23,18,22,25,28,31
+psi[3]	10.08	0.523	0.053	0.351	0.517	21,18,33,24,26,24,24,19,29,28,22,32
+cond_age	9.20	0.603	0.045	0.579	0.517	19,31,20,25,23,22,24,28,29,23,22,34
+root_age_tree	9.28	0.596	0.047	0.513	0.490	29,28,28,22,28,20,24,19,24,25,19,34
+age_n1	5.20	0.921	0.040	0.722	0.494	26,23,32,23,25,21,26,25,22,31,24,22
+age_n2	7.52	0.756	0.057	0.284	0.517	26,20,20,20,30,26,27,32,21,23,28,27
+num_samp_anc	9.92	0.538	0.056	0.291	0.525	20,22,27,26,27,19,26,19,23,33,25,33
+age_FOSSIL_1	13.76	0.247	0.033	0.892	0.505	23,23,25,26,24,30,29,15,25,25,37,18
+age_FOSSIL_2	6.96	0.802	0.029	0.959	0.494	22,26,33,20,25,22,31,24,25,28,23,21
+age_FOSSIL_3	11.44	0.407	0.041	0.683	0.483	31,26,20,24,34,23,21,25,22,32,25,17
+branch_rates_mean	15.12	0.177	0.050	0.422	0.500	22,26,13,27,32,34,21,29,28,27,22,19
+mean_rt	5.60	0.899	0.051	0.411	0.517	24,19,28,26,20,21,23,27,30,28,28,26
+smallest p-value: chi2 0.0955, KS 0.1139 (19 quantities; Bonferroni threshold 0.05/19 = 0.0026)
+== setting D
+replicates 300, bins 12
+param	chi2	p_chi2	KS_D	p_KS	mean_rank	bin_counts
+speciation_rate[1]	7.36	0.769	0.036	0.831	0.494	28,31,22,25,24,23,25,26,20,18,26,32
+speciation_rate[2]	9.28	0.596	0.039	0.756	0.510	17,27,23,25,30,23,24,24,35,28,23,21
+speciation_rate[3]	11.92	0.370	0.060	0.215	0.514	33,19,20,21,18,29,21,28,29,32,26,24
+extinction_rate[1]	27.04	0.005	0.041	0.678	0.501	27,21,19,28,23,24,45,14,26,27,29,17
+extinction_rate[2]	9.68	0.559	0.059	0.237	0.474	31,28,23,26,27,32,20,24,27,15,25,22
+extinction_rate[3]	8.16	0.699	0.029	0.955	0.495	27,26,29,22,23,21,30,17,31,23,29,22
+psi	10.24	0.509	0.049	0.456	0.519	20,17,31,27,22,23,25,30,23,34,23,25
+cond_age	4.48	0.954	0.053	0.370	0.480	28,28,24,26,29,26,21,24,23,27,26,18
+root_age_tree	4.48	0.954	0.053	0.370	0.480	28,28,24,26,29,26,21,24,23,27,26,18
+age_n1	22.24	0.023	0.055	0.315	0.512	23,25,38,20,18,16,26,18,34,31,20,31
+age_n2	7.52	0.756	0.055	0.315	0.478	30,22,24,31,28,22,31,24,25,19,20,24
+num_samp_anc	10.88	0.453	0.068	0.118	0.524	22,21,25,15,24,33,26,29,22,29,31,23
+age_FOSSIL_1	16.40	0.127	0.043	0.627	0.505	19,37,18,24,30,20,25,20,23,35,25,24
+age_FOSSIL_2	23.04	0.017	0.064	0.164	0.481	22,24,34,24,22,41,25,22,19,15,32,20
+age_FOSSIL_3	8.88	0.633	0.028	0.974	0.497	21,32,27,18,27,22,29,21,30,28,25,20
+branch_rates_mean	8.88	0.633	0.056	0.301	0.513	23,34,21,18,19,24,26,26,27,27,30,25
+mean_rt	6.88	0.809	0.048	0.484	0.514	26,25,23,17,21,29,28,23,28,27,22,31
+smallest p-value: chi2 0.0045, KS 0.1177 (17 quantities; Bonferroni threshold 0.05/17 = 0.0029)

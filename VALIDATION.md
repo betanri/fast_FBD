@@ -55,6 +55,25 @@ Status as of 13 November 2026. This file holds the numbers behind the [README Va
 
 RevBayes refused to build one bear state, because its origin was below a fossil's window maximum. That is a check at model construction, not a difference in density.
 
+### Test 1b. Rate shifts, skyline FBD (passed)
+
+*Data: no data and phylogram.* With `rate_shifts`, lambda, mu and psi are piecewise-constant between fixed times (README, Rate shifts). Results: `validation/skyline_checks.txt`; scripts `sky_density_check.py`, `sbc_sky.py`.
+
+| Check | Result |
+|---|---|
+| No shifts: same output as the constant-rate model | 18 of 18 `.log`/`.trees` files byte-identical (examples and bears, six option sets, 3 million proposals); `make test` passes |
+| FBD density against RevBayes 1.3.2 `dnBDSTP(timeline=...)` | 1,012 states, 1 to 3 shifts, both conditionings, 4 to 2,772 tips: largest difference 7.8e-12 up to 152 tips, 2e-9 on the 1,184-species tree |
+| Equal rates in every interval | equals the constant-rate density |
+| Cache check (`--check-every-step`) | no error in 135 runs on the examples and 11 on the 1,184-species tree, all five clocks |
+| Prior recovery | with the FBD density switched off, every interval's rates recover Exp(10) (KS tests, smallest p 0.021 of 26) |
+| Simulation-based calibration, 2 shifts | ranks uniform in 4 settings, 1,600 replicates (smallest p 0.0045, Bonferroni threshold 0.0029) |
+| Speed, 1,184 species | 0.18 s per million proposals without shifts; 0.30 with 2 shifts, 0.33 with 3 |
+
+Differences from RevBayes that remain, and why:
+- RevBayes adds a constant from an approximation of ln N! (-4.7e-8 at 7 tips); it was removed before comparing.
+- In 28 states of the 1,184-species tree where a node or fossil age equals a shift time exactly, RevBayes differs by up to 5.2e-5; an independent 50-digit evaluation agrees with `ffbd` there.
+- One degenerate state (a fossil branch of zero length that is not a sampled ancestor) differs by 0.58; the constant-rate code can reach it only by rounding.
+
 ## 2. Finds the known truth
 
 ### 2a. Simulation-based calibration, small trees (passed)
